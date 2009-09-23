@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "mss3domp.h"
+#include "chaodyn.h"
 #include "io.h"
 
 void usage()

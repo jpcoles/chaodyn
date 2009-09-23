@@ -271,13 +271,13 @@ void capture_phase_space(env_t *env, int clear)
 
 void save_sim(env_t *env)
 {
-    save_image_png("mss", env->snapshot.image, env->snapshot.nr, env->snapshot.nc);
+    save_image_png("chaodyn", env->snapshot.image, env->snapshot.nr, env->snapshot.nc);
 }
 
 void save_phase_space_diagram(env_t *env)
 {
     char *fname = malloc(3+1+5+1);
-    sprintf(fname, "mss.%05ld", env->step);
+    sprintf(fname, "chaodyn.%05ld", env->step);
     save_image_png(fname, env->phase_space_diagram.image, 
                           env->phase_space_diagram.nr, 
                           env->phase_space_diagram.nc);

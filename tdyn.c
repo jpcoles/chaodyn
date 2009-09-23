@@ -1,6 +1,6 @@
 #include <math.h>
 #include <stdlib.h>
-#include "mss3domp.h"
+#include "chaodyn.h"
 #include "io.h"
 
 #define PI (3.1415926535)

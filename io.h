@@ -1,7 +1,7 @@
 #ifndef IO_H
 #define IO_H
 
-#include "mss3domp.h"
+#include "chaodyn.h"
 
 void save_sim(env_t *env, char *fname);
 void save_ic(env_t *env);

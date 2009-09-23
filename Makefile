@@ -7,7 +7,9 @@ CFLAGS+=-fstrict-aliasing -mpreferred-stack-boundary=4
 
 LDFLAGS=-lpng -lm $(OPENMP)
 
-all: mss3domp
+default: chaodyn
+
+all: chaodyn tdyn sim2png simdiff chaodyn1D
 
 tdyn: io.o tdyn.o
 	$(CC) $(LDFLAGS) $^ -o $@ 
@@ -15,17 +17,17 @@ tdyn: io.o tdyn.o
 sim2png: io.o sim2png.o
 	$(CC) $(LDFLAGS) $^ -o $@ 
 
-mss3domp: io.o mss3domp.o
+chaodyn: io.o chaodyn.o
 	$(CC) $(LDFLAGS) $^ -o $@ 
 
 simdiff: simdiff.o
 	$(CC) $(LDFLAGS) $^ -o $@ 
 
-mss: mss.o
-	$(CC) $(LDFLAGS) $^ -o $@ 
-
-mss3d: mss3d.o
+chaodyn1D: chaodyn1D.o
 	$(CC) $(LDFLAGS) $^ -o $@ 
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $<
+
+clean:
+	-rm *.o chaodyn tdyn sim2png simdiff chaodyn1D

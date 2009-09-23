@@ -1,5 +1,5 @@
-#ifndef MSS3DOMP_H
-#define MSS3DOMP_H
+#ifndef CHAODYN_H
+#define CHAODYN_H
 
 #include <assert.h>
 #include <stdio.h>

@@ -1,6 +1,6 @@
 #include <png.h>
 #include <stdlib.h>
-#include "mss3domp.h"
+#include "chaodyn.h"
 #include "io.h"
 
 //==============================================================================
@@ -10,7 +10,7 @@ void save_sim(env_t *env, char *fname)
 {
     header_t header = 
     {
-        "mss3domp v0.1   ",
+        "chaodyn v0.1   ",
         WITH_INTEGERS,
         env->N,
         env->M,
@@ -71,11 +71,11 @@ void load(env_t *env, char *fname)
     if (h.with_integers != WITH_INTEGERS)
     {
         if (WITH_INTEGERS)
-            eprintf("This version of mss3domp was compiled with integers enabled, but\n"
+            eprintf("This version of chaodyn was compiled with integers enabled, but\n"
                     "the given simulation input was generated using floats. The two\n"
                     "are not compatible.\n");
         else
-            eprintf("This version of mss3domp was compiled with floats enabled, but\n"
+            eprintf("This version of chaodyn was compiled with floats enabled, but\n"
                     "the given simulation input was generated using integers. The two\n"
                     "are not compatible.\n");
         exit(EXIT_FAILURE);

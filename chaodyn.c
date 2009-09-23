@@ -11,7 +11,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "mss3domp.h"
+#include "chaodyn.h"
 #include "io.h"
 
 FILE *fpE;  /* Energy statistics */
@@ -848,7 +848,7 @@ env_t *new_env()
     env->opt.save_image_every = 0;
     env->opt.save_path_every  = 1;
     env->opt.modify_mode      = 1;
-    env->opt.tag              = strcpy(malloc(9), "mss3domp");
+    env->opt.tag              = strcpy(malloc(9), "chaodyn");
     env->opt.inputfile        = NULL;
     env->opt.verbosity        = 1;
     env->opt.dump_sim         = 0;
@@ -882,7 +882,7 @@ env_t *new_env()
 void usage()
 {
     fprintf(stderr, 
-    "Usage: mss3domp [OPTION]... [-i inputfile | --gen-ic=<ic-name>]\n"
+    "Usage: chaodyn [OPTION]... [-i inputfile | --gen-ic=<ic-name>]\n"
     "\n"
     "where OPTION can be\n"
     "  -N N                 Use N particles.\n"
@@ -901,7 +901,7 @@ void usage()
     "                       (2) Flip the least significant bit in the velocity\n"
     "                           for the first particle.\n"
     "                       (3) Remove the last particle\n"
-    "  --tag=NAME           Prefix output files with NAME. Defaults to mss3domp\n"
+    "  --tag=NAME           Prefix output files with NAME. Defaults to 'chaodyn'.\n"
     "  --dump-sim           Write information about inputfile to the screen before\n"
     "                       continuing.\n"
     "\n"
