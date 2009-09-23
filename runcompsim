@@ -1,0 +1,9 @@
+#!/bin/bash
+
+FILES=`find ./ -name 'compsim'`
+
+for f in $FILES; do
+    DIR=`dirname $f`
+    (cd $DIR && rm -f diffs && ./compsim)
+done
+

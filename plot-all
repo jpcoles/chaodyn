@@ -1,0 +1,6 @@
+#!/bin/bash
+
+FILES="TestResults/2halos/2halos.ENERGY "
+FILES+=`find TestResults/Single-Particle-Not-Reversed/ -name '*RM???*ENERGY' | sort`
+
+python25 plot.py $FILES
