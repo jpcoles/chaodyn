@@ -74,7 +74,8 @@ int main(int argc, char **argv)
 #endif
 
 #if 1
-        diff2 += sqrt(pow(p0.x[0] - p1.x[0],2) + pow(p0.x[1] - p1.x[1], 2) + pow(p0.x[2] - p1.x[2],2));
+        //diff2 += sqrt(pow(p0.x[0] - p1.x[0],2) + pow(p0.x[1] - p1.x[1], 2) + pow(p0.x[2] - p1.x[2],2));
+        diff2 += pow(p0.x[0] - p1.x[0],2) + pow(p0.x[1] - p1.x[1], 2) + pow(p0.x[2] - p1.x[2],2);
 #endif
 
         if ((p0.x[0] != p1.x[0]) ||  (p0.x[1] != p1.x[1]) ||  (p0.x[2] != p1.x[2])
@@ -95,6 +96,7 @@ int main(int argc, char **argv)
     }
 
     double d = sqrt(pow(diff[0],2) + pow(diff[1],2) + pow(diff[2],2)) / h0.N;
+    diff2 = sqrt(diff2);
     printf("diff: %e %e\n", d, diff2);
 
     if (nbad == 0)

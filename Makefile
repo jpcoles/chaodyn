@@ -17,7 +17,7 @@ tdyn: io.o tdyn.o
 sim2png: io.o sim2png.o
 	$(CC) $(LDFLAGS) $^ -o $@ 
 
-chaodyn: io.o chaodyn.o
+chaodyn: io.o ic.o chaodyn.o
 	$(CC) $(LDFLAGS) $^ -o $@ 
 
 simdiff: simdiff.o

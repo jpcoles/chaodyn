@@ -1,3 +1,12 @@
+/*
+ * A 64-bit unsigned integer has 20 decimal digits of which 19 can range
+ * from 0 to 9. The scales for a given simulation must be chosen so that
+ * there is enough precision to the "right" of the decimal point and that
+ * the "left" side can also range over the size of the simulation. At
+ * least 10 decimal places is a good start, but then more then better
+ * to conserve energy.
+ */
+
 #define _GNU_SOURCE
 #include <assert.h>
 #include <getopt.h>
@@ -13,8 +22,8 @@
 
 #include "chaodyn.h"
 #include "io.h"
+#include "ic.h"
 
-FILE *fpE;  /* Energy statistics */
 
 //==============================================================================
 //                                 integrate
@@ -24,7 +33,7 @@ FILE *fpE;  /* Energy statistics */
 // Plummer softening
 #define PHI(r)     ( 1./sqrt(1.+pow((r),2)))
 #define GRADPHI(r) (pow(sqrt(1.+pow((r),2)), -3) * (r))
-void integrate(env_t *env, int forward)
+void integrate(env_t *env)
 {
     size_t i,j; 
     size_t   N   = env->N;
@@ -37,134 +46,30 @@ void integrate(env_t *env, int forward)
 
     force_t ***Ft = env->Ft;
 
-    int128_t   U = 0;         /* Potential energy */
-    int128_t   T = 0;         /* Kinetic energy   */
-    energy_t   V = 0;         /* Virial Theorem   */
-    int128_t    L0=0,L1=0,L2=0;   /* Angular momentum */
-    double    L0b=0,L1b=0,L2b=0;   /* Angular momentum */
-    int128_t    P0=0,P1=0,P2=0;   /* Momentum         */
-
-    double     G = env->units.G;
-
-    int128_t x,y,z;
-    int128_t vx,vy,vz;
-    force_t Fx0, Fy0, Fz0;
+    double x,y,z;
     int128_t dx,dy,dz;
 
-    long double r2,rinv,re;
+    force_t Fx0, Fy0, Fz0;
+
+    double r2,rinv,re;
     const double eps = env->eps;
     const double e  = 1. / eps; 
+    const double G = env->units.G;
 
 //  eprintf("%ld] "POST" "POST" "POST"\n", 0, p[0].v[0], p[0].v[1], p[0].v[2]);
 //  eprintf("%ld] "POST" "POST" "POST"\n", 1, p[1].v[0], p[1].v[1], p[1].v[2]);
 //  eprintf("%ld] "POST" "POST" "POST"\n", 2, p[2].v[0], p[2].v[1], p[2].v[2]);
 
-    if (forward)
-    {
-        double XX=0;
-        #pragma omp parallel for \
-                    private(x,y,z,dx,dy,dz) \
-                    shared(p) \
-                    reduction(+:T)  reduction(+:V) \
-                    reduction(+:L0) reduction(+:L1) reduction(+:L2) \
-                    reduction(+:L0b) reduction(+:L1b) reduction(+:L2b) \
-                    reduction(+:P0) reduction(+:P1) reduction(+:P2) 
-        for (i=0; i < N; i++) 
-        {
-            //T += pow(p[i].v[0],2) + pow(p[i].v[1],2) + pow(p[i].v[2],2);
-
-            x = p[i].x[0];
-            y = p[i].x[1];
-            z = p[i].x[2];
-
-            vx = p[i].v[0];
-            vy = p[i].v[1];
-            vz = p[i].v[2];
-
-            T += vx*vx + vy*vy + vz*vz;
-            
-//          L0 += ((double)p[i].x[1])*((double)p[i].v[2]) - ((double)p[i].x[2])*((double)p[i].v[1]);
-//          L1 += ((double)p[i].x[2])*((double)p[i].v[0]) - ((double)p[i].x[0])*((double)p[i].v[2]);
-//          L2 += ((double)p[i].x[0])*((double)p[i].v[1]) - ((double)p[i].x[1])*((double)p[i].v[0]);
-
-            L0 += y*vz - z*vy;
-            L1 += z*vx - x*vz;
-            L2 += x*vy - y*vx;
-
-            L0b += fabs(((double)p[i].x[1])*((double)p[i].v[2])) + fabs(((double)p[i].x[2])*((double)p[i].v[1]));
-            L1b += fabs(((double)p[i].x[2])*((double)p[i].v[0])) + fabs(((double)p[i].x[0])*((double)p[i].v[2]));
-            L2b += fabs(((double)p[i].x[0])*((double)p[i].v[1])) + fabs(((double)p[i].x[1])*((double)p[i].v[0]));
-
-            //eprintf("%ld] %f %f %f\n", i, L0, L1, (double)(p[i].x[0]*p[i].v[1] - p[i].x[1]*p[i].v[0]));
-            //eprintf("%ld] %f %f %f\n", i, L0, L1, L2);
-
-            P0 += vx;
-            P1 += vy;
-            P2 += vz;
-
-            V += x*Fx[i] + y*Fy[i] + z*Fz[i];
-        }
-        V /= 2;
-        //T *= 0.5 * M;
-        T /= 2;
-        T *= M;
-        //eprintf("%ld] %f %f %f %f\n", 9, L0, L1, L2, XX);
-
-        #pragma omp parallel for \
-                    schedule(dynamic, 2) \
-                    firstprivate(M,N) \
-                    private(i,j) \
-                    private(x,y,z, dx,dy,dz,r2) \
-                    private(re) \
-                    shared(p) \
-                    reduction(-:U)
-        for (i=0; i < N-1; i++)
-        {
-            x = p[i].x[0];
-            y = p[i].x[1];
-            z = p[i].x[2];
-
-            for (j=i+1; j < N; j++)
-            {
-                dx = (int128_t)p[j].x[0] - x;
-                dy = (int128_t)p[j].x[1] - y;
-                dz = (int128_t)p[j].x[2] - z;
-                r2 = dx*dx + dy*dy + dz*dz;
-
-                //eprintf("%llf\n", r2);
-
-                assert(r2 != 0);
-                re = sqrt(r2) * e;
-
-                U -= (G*M*M) / (int128_t)sqrtl(pow(eps,2) + r2);
-                //eprintf("%f %f %f\n", (double)U, (double)(G*M*M), (double)(r2));
-                //eprintf("%f %f %f\n", (double)((G*M*M) / sqrtl(pow(eps,2) + r2)), (double)(G*M*M), (double)sqrtl(r2));
-                //U -= PHI(re);
-            }
-        }
-        //U *= G*M*M;
-    }
-
-//  L2 = 0;
-//  for (i=0; i < N; i++) 
-//      L2 += ((double)p[i].x[0])*((double)p[i].v[1]) - ((double)p[i].x[1])*((double)p[i].v[0]);
-//  eprintf("L2 BEFORE DRIFT: %.23f\n", L2);
-
     //--------------------------------------------------------------------------
     // Drift
     //--------------------------------------------------------------------------
-    #pragma omp parallel for firstprivate(N) private(x,y,z) shared(p)
+    #pragma omp parallel for firstprivate(N) shared(p)
     for (i=0; i < N; i++) 
     {
         p[i].x[0] += (pos_t)(p[i].v[0]);
         p[i].x[1] += (pos_t)(p[i].v[1]);
         p[i].x[2] += (pos_t)(p[i].v[2]);
     }
-
-//  L2 = 0;
-//  for (i=0; i < N; i++) 
-//      L2 += ((double)p[i].x[0])*((double)p[i].v[1]) - ((double)p[i].x[1])*((double)p[i].v[0]);
-//  eprintf("L2 AFTER DRIFT:  %.23f\n", L2);
 
     //--------------------------------------------------------------------------
     // Acceleration / Potential
@@ -192,22 +97,17 @@ void integrate(env_t *env, int forward)
             dz = p[j].x[2] - z;
             r2 = dx*dx + dy*dy + dz*dz;
 
-            assert(r2 != 0);
-            //DBG(2) printf("r=%e\n", r);
-            rinv = 1 / sqrt(r2);
+            rinv = 1.0 / sqrt(r2);
 
             re = sqrt(r2) * e;
-            //re2 = r2*e*e;
 
             DBG(1) eprintf("r2=%e %ld,%ld rinv=%e re=%e gradphi=%e\n", r2,i,j, rinv, re, GRADPHI(re));
             DBG(1) eprintf("\n**\n%e\n**\n", ((M*e)*e)*(dx*rinv)*GRADPHI(re));
             
             // round'ing is important. Conserves momentum perfectly.
-            //#define Fhat(x) (((x)*rinv)* pow(sqrt(1.+re2)))
-            //#define GRADPHI(r) (pow(sqrt(1.+pow((r),2)), -3) * (r))
+            double gradphi = GRADPHI(re);
+            #define Fhat(x) round((G*((M*e)*e)*(((x)*rinv)*gradphi)))
 
-            #define Fhat(x) round((G*((M*e)*e)*(((x)*rinv)*GRADPHI(re))))
-            //#define Fhat(x) (((((x)*rinv)*GRADPHI(re))))
             Fx0 = Fhat(dx);
             Fy0 = Fhat(dy);
             Fz0 = Fhat(dz);
@@ -231,30 +131,14 @@ void integrate(env_t *env, int forward)
             Fyi += Ft[i][j][1];
             Fzi += Ft[i][j][2];
         }
-#if 1
-#if 1
+
         Fx[i] = Fxi;
         Fy[i] = Fyi;
         Fz[i] = Fzi;
-#else
-        Fx[i] = round(G*M * e*e* Fxi);
-        Fy[i] = round(G*M * e*e* Fyi);
-        Fz[i] = round(G*M * e*e* Fzi);
-#endif
-#else
-        Fx[i] = 0;
-        Fy[i] = 0;
-        Fz[i] = 0;
-#endif
 
         DBG(1) eprintf("F[%ld] "FORCET" "FORCET" "FORCET"\n", i, Fx[i], Fy[i], Fz[i]);
         DBG(1) eprintf("%e\n", pow(Fxi,2)+pow(Fyi,2)+pow(Fzi,2));
     }
-
-//  L2 = 0;
-//  for (i=0; i < N; i++) 
-//      L2 += ((double)p[i].x[0])*((double)p[i].v[1]) - ((double)p[i].x[1])*((double)p[i].v[0]);
-//  eprintf("L2 BEFORE KICK: %.23f\n", L2);
 
     //--------------------------------------------------------------------------
     // Kick
@@ -268,12 +152,6 @@ void integrate(env_t *env, int forward)
         DBG(1) eprintf("a[%ld] "ACCT" "ACCT" "ACCT"\n", i, (acc_t)Fx[i], (acc_t)Fy[i], (acc_t)Fz[i]);
         DBG(1) eprintf("v[%ld] "VELT" "VELT" "VELT"\n", i, p[i].v[0], p[i].v[1], p[i].v[2]);
     }
-
-//  L2 = 0;
-//  for (i=0; i < N; i++) 
-//      L2 += ((double)p[i].x[0])*((double)p[i].v[1]) - ((double)p[i].x[1])*((double)p[i].v[0]);
-
-//  eprintf("L2 AFTER KICK:  %.23f\n", L2);
 
     //--------------------------------------------------------------------------
     // Drift
@@ -289,412 +167,8 @@ void integrate(env_t *env, int forward)
         //DBG(1) eprintf("dx[%ld] "POST" "POST" "POST"\n", i, dx, dy, dz);
         DBG(1) eprintf("x[%ld] "POST" "POST" "POST"\n", i, p[i].x[0], p[i].x[1], p[i].x[2]);
     }
-
-#if 0
-    if (!forward)
-    {
-        #pragma omp parallel for \
-                    private(x,y,z,dx,dy,dz) \
-                    shared(p) \
-                    reduction(+:T) \
-                    reduction(+:L0) reduction(+:L1) reduction(+:L2) \
-                    reduction(+:P0) reduction(+:P1) reduction(+:P2)
-        for (i=0; i < N; i++) 
-        {
-            T += 0.5 * M * (pow(p[i].v[0],2) + pow(p[i].v[1],2) + pow(p[i].v[2],2));
-            L0 += p[i].x[1]*p[i].v[2] - p[i].x[2]*p[i].v[1];
-            L1 += p[i].x[2]*p[i].v[0] - p[i].x[0]*p[i].v[2];
-            L2 += p[i].x[0]*p[i].v[1] - p[i].x[1]*p[i].v[0];
-
-            P0 += p[i].v[0];
-            P1 += p[i].v[1];
-            P2 += p[i].v[2];
-        }
-
-        #pragma omp parallel for \
-                    schedule(dynamic, 2) \
-                    firstprivate(M,N) \
-                    private(i,j) \
-                    private(x,y,z, dx,dy,dz,r2) \
-                    private(re) \
-                    shared(p) \
-                    reduction(-:U)
-        for (i=0; i < N-1; i++)
-        {
-            x = p[i].x[0];
-            y = p[i].x[1];
-            z = p[i].x[2];
-
-            for (j=i+1; j < N; j++)
-            {
-                dx = p[j].x[0] - x;
-                dy = p[j].x[1] - y;
-                dz = p[j].x[2] - z;
-                r2 = pow(dx,2) + pow(dy,2) + pow(dz,2);
-
-                assert(r2 != 0);
-                re = sqrt(r2) * e;
-
-                U -= G*M*M*e * PHI(re);
-            }
-        }
-
-    }
-#endif
-
-    //double Lmag = M * sqrt(pow(L0,2) + pow(L1,2) + pow(L2,2));
-    double Pmag = M * sqrtl(P0*P0 + P1*P1 + P2*P2);
-    double Lmag = M * sqrtl(L0*L0 + L1*L1 + L2*L2);
-
-    fprintf(fpE, "%5ld % .6e % .6e % .6e % 15ld % 15ld % 15ld %.6le % 3ld % 3ld % 3ld %.6e "ENGYT"\n", 
-    //fprintf(fpE, "%5ld "ENGYT" "ENGYT" "ENGYT" %.6e %.6e %.6e %.6e % 15ld % 15ld % 15ld %.6e "ENGYT"\n", 
-            env->step, (double)T,(double)U, (double)(T+U), (int64_t)L0,(int64_t)L1,(int64_t)L2,Lmag, (int64_t)P0,(int64_t)P1,(int64_t)P2,Pmag, V);
-            //env->step, T,U, T+U, L0/L0b,L1/L1b,L2/L2b,Lmag, P0,P1,P2,Pmag, V);
-            //env->step, T,U, T+U, L0,L1,L2,Lmag, P0,P1,P2,Pmag, V);
-
-    fflush(fpE);
 }
 
-//==============================================================================
-//                                 ic_random
-//==============================================================================
-void ic_random(env_t *env)
-{
-    size_t i;
-    size_t N = env->N;
-    for (i=0; i < N; i++)
-    {
-        env->p[i].x[0] = (pos_t)(env->radius * (2*drand48()-1));
-        env->p[i].x[1] = 0; //(pos_t)(env->radius * (2*drand48()-1));
-        env->p[i].x[2] = 0; //(pos_t)(env->radius * (2*drand48()-1));
-        env->p[i].v[0] = 0;
-        env->p[i].v[1] = 0;
-        env->p[i].v[2] = 0;
-    }
-}
-
-//==============================================================================
-//                                   sphere
-//==============================================================================
-void sphere(env_t *env, pos_t x0, pos_t y0, pos_t z0, pos_t R, size_t N0, size_t N1, class_t class)
-{
-    size_t i,j;
-    double x,y,z, t;
-    int good;
-
-    for (i=N0; i < N1; i++)
-    {
-        do
-        {
-            z = 2.0 * drand48() - 1.0;
-            t = 2.0 * M_PI * drand48();
-            x = sqrt(1-(z*z)) * cos(t);
-            y = sqrt(1-(z*z)) * sin(t);
-
-            x = x0 + x*R;
-            y = y0 + y*R;
-            z = z0 + z*R;
-
-            good = 1;
-            for (j=0; j < i; j++)
-            {
-                double r2 = pow(env->p[i].x[0] - x, 2)
-                          + pow(env->p[i].x[1] - y, 2)
-                          + pow(env->p[i].x[2] - z, 2);
-                if (r2 < 10000) { good = 0; break; }
-            }
-        } while (!good);
-
-        env->p[i].x[0] = x;
-        env->p[i].x[1] = y;
-        env->p[i].x[2] = z;
-        env->p[i].v[0] = 0;
-        env->p[i].v[1] = 0;
-        env->p[i].v[2] = 0;
-        env->p[i].class = class;
-
-        DBG(2) eprintf("%ld] %e %e %e\n", i, x, y, z);
-    }
-}
-
-//==============================================================================
-//                                   shell
-//==============================================================================
-void shell(env_t *env, pos_t x0, pos_t y0, pos_t z0, pos_t R, size_t N0, size_t N1, class_t class)
-{
-    size_t i,j;
-    double x,y,z, t,w;
-
-    for (i=N0; i < N1; i++)
-    {
-redo:   {
-            z = 2.0 * drand48() - 1.0;
-            t = 2.0 * M_PI * drand48();
-            w = sqrt(1 - z*z);
-            x = w * cos(t);
-            y = w * sin(t);
-
-            x *= R;
-            y *= R;
-            z *= R;
-
-            x += x0;
-            y += y0;
-            z += z0;
-
-            for (j=0; j < i; j++)
-            {
-                double r2 = pow(env->p[i].x[0] - x, 2)
-                          + pow(env->p[i].x[1] - y, 2)
-                          + pow(env->p[i].x[2] - z, 2);
-                if (r2 < 4*env->eps) goto redo;
-            }
-        } 
-
-        env->p[i].x[0] = x;
-        env->p[i].x[1] = y;
-        env->p[i].x[2] = z;
-        env->p[i].v[0] = 0;
-        env->p[i].v[1] = 0;
-        env->p[i].v[2] = 0;
-        env->p[i].class = class;
-
-        DBG(2) eprintf("%ld] %e %e %e\n", i, x, y, z);
-    }
-}
-
-//==============================================================================
-//                          ic_uniform_random_shell
-//==============================================================================
-void ic_uniform_random_shell(env_t *env)
-{
-    env->N      = MAX(env->N, 100);
-    env->M      = 1e22 / 4;
-    env->radius = 1e9;
-    env->eps    = 1e8;
-    env->p      = malloc(env->N * sizeof(*(env->p)));
-    env->opt.Nclasses = 1;
-
-    shell(env, 0,0,0, env->radius, 0, env->N, 0);
-}
-
-//==============================================================================
-//                               ic_two_shells
-//==============================================================================
-void ic_two_shells(env_t *env)
-{
-    env->N      = MAX(env->N, 100);
-    env->M      = 1e22 / 4;
-    env->radius = 1e9;
-    env->eps    = 1e8;
-    env->p      = malloc(env->N * sizeof(*(env->p)));
-    env->opt.Nclasses = 2;
-
-    shell(env, -env->radius*(1.-1./5),0,0, env->radius/5, 0,env->N/2, 0);
-    shell(env,  env->radius*(1.-1./5),0,0, env->radius/5, env->N/2,env->N, 1);
-
-    fflush(stdout);
-}
-
-//==============================================================================
-//                                ic_one_shell
-//==============================================================================
-void ic_one_shell(env_t *env)
-{
-    assert(env->N != 0);
-
-    double Myr  = env->units.Myr  = 1e6 * 365 * 24 * 60 * 60;   // [s]
-    double kpc  = env->units.kpc  = 3.08568025e19;              // [m]
-    double Msun = env->units.Msun = 1.98892e30;                 // [kg]
-
-    double G = 6.67300e-11;                                     // [m^3 kg^-1 s^-2]
-    double L = env->units.L = 1e-8 * kpc;
-    double T = env->units.T = 1e-2 * Myr;
-    double M = env->units.M = 1e5 * Msun;
-               env->units.G = G * (pow(L,-3) * M * pow(T,2));
-
-    env->N      = env->N;
-    env->M      = 1e12*Msun / M / env->N;
-    env->radius = 400*kpc / L;
-    env->eps    = 10*kpc / L;
-
-#if 1
-    eprintf("unit G = %e g\n", env->units.G);
-    eprintf("1 M = %e\n", env->M);
-    eprintf("1 T = %e\n", T / Myr);
-    eprintf("1 L = %e\n", L / kpc);
-    eprintf("1 V = %e\n", (L/T) / (kpc/Myr));
-#else
-    eprintf("1 M = %e Msun\n", M / Msun);
-    eprintf("1 T = %e Myr\n", T / Myr);
-    eprintf("1 L = %e kpc\n", L / kpc);
-    eprintf("1 V = %e kpc/Myr\n", (L/T) / (kpc/Myr));
-    eprintf("1 kpc = %e L\n", kpc / L);
-    eprintf("env->M      = "MASST" [%e Msun]\n", env->M, env->M/Msun);
-    eprintf("env->radius = "POST"\n", env->radius);
-    eprintf("env->eps    = "SOFTT"\n", env->eps);
-#endif
-
-    env->p = malloc(env->N * sizeof(*(env->p)));
-    env->opt.Nclasses = 1;
-
-    shell(env, 0,0,0, 300*kpc / L, 0,env->N, 0);
-
-    fflush(stdout);
-}
-
-//==============================================================================
-//                             ic_colliding_halos
-//==============================================================================
-void ic_colliding_halos(env_t *env)
-{
-    /* This assumes a halo has already been loaded */
-
-    size_t i;
-    env->p = realloc(env->p, 2 * env->N * sizeof(*(env->p)));
-    memcpy(env->p + env->N, env->p, env->N * sizeof(*(env->p)));
-
-    for (i=0; i < env->N; i++)
-        env->p[i].x[0] -= 50*env->units.kpc / env->units.L;
-
-    for (i=env->N; i < 2*env->N; i++)
-        env->p[i].x[0] += 50*env->units.kpc / env->units.L;
-
-    //env->radius *= 2;
-
-    env->N *= 2;
-}
-
-//==============================================================================
-//                                 ic_sphere
-//==============================================================================
-void ic_sphere(env_t *env)
-{
-    env->N      = env->N;
-    env->M      = 1e20 / 4;
-    env->radius = 1e9;
-    env->eps    = 1e8;
-    env->p      = malloc(env->N * sizeof(*(env->p)));
-    env->opt.Nclasses = 3;
-
-    sphere(env, 0,0,0, env->radius, 0, env->N, 0);
-}
-
-//==============================================================================
-//                                 ic_figure8
-//==============================================================================
-void ic_figure8(env_t *env)
-{
-    double Myr  = env->units.Myr  = 1e6 * 365 * 24 * 60 * 60;   // [s]
-    double kpc  = env->units.kpc  = 3.08568025e16;              // [km]
-    double Msun = env->units.Msun = 1.98892e33;                 // [g]
-
-//  double G = env->units.G = 1;
-//  double L = env->units.L = 1e-2 * kpc;
-//  double T = env->units.T = 1e-6 * Myr;
-//  double M = env->units.M = pow(L,3) / G / pow(T,2);
-
-    double G = 1;
-    double L = env->units.L = 1e-3 * kpc;
-    double T = env->units.T = 1e-12 * Myr;
-    double M = env->units.M = pow(L,3) / G / pow(T,2);
-
-    env->N            = 3;
-    env->M            = 1* M;
-    env->radius       = 2* L;
-    env->eps          = 1e-8* L;
-    env->opt.Nclasses = 3;
-    env->p            = malloc(env->N * sizeof(*(env->p)));
-
-    double vfac = L/T;
-    double rfac = L;
-
-    VL(1) LOG("M %e\n", M);
-    VL(1) LOG("L %e\n", L);
-    VL(1) LOG("T %e\n", T);
-    VL(1) LOG("V %e\n", L/T);
-    VL(1) LOG("vfac %e\n", vfac);
-    VL(1) LOG("rvac %e\n", rfac);
-
-    env->p[0].x[0] =  1.07614373351092    * rfac;
-    env->p[0].x[1] =  0.0                 * rfac;
-    env->p[0].x[2] =  0.0                 * rfac;
-    env->p[0].v[0] =  0.0                 * vfac;
-    env->p[0].v[1] = -0.468266218409064   * vfac;
-    env->p[0].v[2] =  0.0                 * vfac;
-    env->p[0].class = 0;
-
-    env->p[1].x[0] = -0.538071866755461   * rfac;
-    env->p[1].x[1] =  0.343706827758244   * rfac;
-    env->p[1].x[2] =  0.0                 * rfac;
-    env->p[1].v[0] = -1.09960375207519    * vfac;
-    env->p[1].v[1] =  0.23413310920453    * vfac;
-    env->p[1].v[2] =  0.0                 * vfac;
-    env->p[1].class = 1;
-
-    env->p[2].x[0] = -0.538071866755461   * rfac;
-    env->p[2].x[1] = -0.343706827758244   * rfac;
-    env->p[2].x[2] =  0.0                 * rfac;
-    env->p[2].v[0] =  1.09960375207519    * vfac;
-    env->p[2].v[1] =  0.23413310920453    * vfac;
-    env->p[2].v[2] =  0.0                 * vfac;
-    env->p[2].class = 2;
-}
-
-#if 0
-void ic_figure8(env_t *env)
-{
-    double yr   = env->units.Myr  = 365;                        // [s]
-    double kpc  = env->units.kpc  = 3.08568025e16;              // [km]
-    double Msun = env->units.Msun = 1.98892e33;                 // [g]
-
-    double G = env->units.G = 1;
-    double L = env->units.L = 1 * kpc;
-    double T = env->units.T = 1 * yr;
-    double M = env->units.M = pow(L,3) / G / pow(T,2);
-
-    env->N            = 3;
-    env->M            = M;
-    env->radius       = 2 * L;
-    env->eps          = 1e-3 * L;
-    env->opt.Nclasses = 3;
-    env->p            = malloc(env->N * sizeof(*(env->p)));
-
-    double vfac = L/T;
-    double rfac = L;
-
-    VL(1) LOG("M %e\n", M);
-    VL(1) LOG("L %e\n", L);
-    VL(1) LOG("T %e\n", T);
-    VL(1) LOG("V %e\n", L/T);
-    VL(1) LOG("vfac %e\n", vfac);
-    VL(1) LOG("rvac %e\n", rfac);
-
-    env->p[0].x[0] =  0.97000436    * rfac;
-    env->p[0].x[1] = -0.24308753    * rfac;
-    env->p[0].x[2] =  0.0           * rfac;
-    env->p[0].v[0] =  0.93240737/2  * vfac;
-    env->p[0].v[1] =  0.86473146/2  * vfac;
-    env->p[0].v[2] =  0.0           * vfac;
-    env->p[0].class = 0;
-
-    env->p[1].x[0] =  0.0           * rfac;
-    env->p[1].x[1] =  0.0           * rfac;
-    env->p[1].x[2] =  0.0           * rfac;
-    env->p[1].v[0] = -0.93240737    * vfac;
-    env->p[1].v[1] = -0.86473146    * vfac;
-    env->p[1].v[2] =  0.0           * vfac;
-    env->p[1].class = 1;
-
-    env->p[2].x[0] = -0.97000436    * rfac;
-    env->p[2].x[1] =  0.24308753    * rfac;
-    env->p[2].x[2] =  0.0           * rfac;
-    env->p[2].v[0] =  0.93240737/2  * vfac;
-    env->p[2].v[1] =  0.86473146/2  * vfac;
-    env->p[2].v[2] =  0.0           * vfac;
-    env->p[2].class = 2;
-}
-#endif
 
 //==============================================================================
 //                                generate_ics
@@ -706,17 +180,22 @@ void generate_ics(env_t *env)
     //ic_figure8(env);
     //ic_two_shells(env);
     //ic_sphere(env);
-    ic_one_shell(env);
+    //ic_one_shell(env);
 }
 
 //==============================================================================
 //                                  capture
 //==============================================================================
-void capture(env_t *env, particle_t *p, image_t *img, int clear)
+void capture(env_t *env, particle_t *p, image_t *img, int clear, int with_gradient)
 {
+    double scale = 1;
+
     if (clear) memset(img->image,
                       0, 
                       3*img->nc*img->nr*sizeof(*(img->image)));
+
+    if (with_gradient)
+        scale = pow(((double)env->step) / env->opt.Nsteps, 3);
 
     size_t i;
     for (i=0; i < env->N; i++)
@@ -725,10 +204,9 @@ void capture(env_t *env, particle_t *p, image_t *img, int clear)
         int32_t r = (-p[i].x[1] + env->radius) / (2.0*env->radius) * env->opt.img_rows;
         if (!(0 <= r && r < env->opt.img_rows)) continue;
         if (!(0 <= c && c < env->opt.img_cols)) continue;
-        img->image[3*(r*img->nc + c) + 0] = env->class_color[p[i].class][0];
-        img->image[3*(r*img->nc + c) + 1] = env->class_color[p[i].class][1];
-        img->image[3*(r*img->nc + c) + 2] = env->class_color[p[i].class][2];
-        //eprintf("c=%i r=%i\n", c,r);
+        img->image[3*(r*img->nc + c) + 0] = round(env->class_color[p[i].class][0] * scale);
+        img->image[3*(r*img->nc + c) + 1] = round(env->class_color[p[i].class][1] * scale);
+        img->image[3*(r*img->nc + c) + 2] = round(env->class_color[p[i].class][2] * scale);
     }
 }
 
@@ -814,6 +292,117 @@ void periodic_report(int sig)
     alarm(1);
 }
 #endif
+
+//==============================================================================
+//                                   stats
+//==============================================================================
+void stats(env_t *env, FILE *fpE)
+{
+    size_t i,j; 
+    size_t   N   = env->N;
+    mass_t   M   = env->M;
+
+    force_t    *Fx  = env->F[0];
+    force_t    *Fy  = env->F[1];
+    force_t    *Fz  = env->F[2];
+    particle_t *p   = env->p;
+
+    energy_t T = 0;                 /* Kinetic energy   */
+    energy_t U = 0;                 /* Potential energy */
+    energy_t Tavg = 0;              /* Virial Theorem   */
+    double   L,  Lx=0,Ly=0,Lz=0;        /* Angular momentum */
+    vel_t    P,  Px=0,Py=0,Pz=0;        /* Momentum         */
+    pos_t    CM, CMx=0, CMy=0, CMz=0;
+
+    double   Lxb=0,Lyb=0,Lzb=0;     /* Angular momentum */
+
+    double r2,re;
+    double x,y,z;
+    double vx,vy,vz;
+    int128_t dx,dy,dz;
+    const double eps = env->eps;
+    const double e   = 1. / eps; 
+    const double G   = env->units.G;
+
+    #pragma omp parallel for \
+                private(x,y,z,dx,dy,dz) \
+                shared(p) \
+                reduction(+:T)   reduction(+:Tavg) \
+                reduction(+:Lx)  reduction(+:Ly)  reduction(+:Lz)  \
+                reduction(+:Lxb) reduction(+:Lyb) reduction(+:Lzb) \
+                reduction(+:Px)  reduction(+:Py)  reduction(+:Pz)  \
+                reduction(+:CMx) reduction(+:CMy) reduction(+:CMz)  
+    for (i=0; i < N; i++) 
+    {
+        x  = p[i].x[0]; y  = p[i].x[1]; z  = p[i].x[2];
+        vx = p[i].v[0]; vy = p[i].v[1]; vz = p[i].v[2];
+
+        T    += pow(vx,2) + pow(vy,2) + pow(vz,2);
+        Tavg += x*Fx[i] + y*Fy[i] + z*Fz[i];
+
+        Lx += y*vz - z*vy;
+        Ly += z*vx - x*vz;
+        Lz += x*vy - y*vx;
+
+        Lxb += fabs(y*vz) + fabs(z*vy);
+        Lyb += fabs(z*vx) + fabs(x*vz);
+        Lzb += fabs(x*vy) + fabs(y*vx);
+
+        Px += p[i].v[0];
+        Py += p[i].v[1];
+        Pz += p[i].v[2];
+
+        CMx += p[i].x[0];
+        CMy += p[i].x[1];
+        CMz += p[i].x[2];
+    }
+
+    T /= 2;
+    T *= M;
+    Tavg /= 2;
+
+    #pragma omp parallel for \
+                schedule(dynamic, 2) \
+                firstprivate(M,N) \
+                private(i,j) \
+                private(x,y,z, dx,dy,dz,r2) \
+                private(re) \
+                shared(p) \
+                reduction(-:U)
+    for (i=0; i < N-1; i++)
+    {
+        x = p[i].x[0];
+        y = p[i].x[1];
+        z = p[i].x[2];
+
+        for (j=i+1; j < N; j++)
+        {
+            dx = (int128_t)p[j].x[0] - x;
+            dy = (int128_t)p[j].x[1] - y;
+            dz = (int128_t)p[j].x[2] - z;
+            r2 = dx*dx + dy*dy + dz*dz;
+
+            assert(r2 != 0);
+            re = sqrt(r2) * e;
+
+            U -= (G*M*M) / sqrt(pow(eps,2) + r2);
+        }
+    }
+
+    Lx /= (Lxb == 0 ? 1 : Lxb);
+    Ly /= (Lyb == 0 ? 1 : Lyb);
+    Lz /= (Lzb == 0 ? 1 : Lzb);
+    L  = sqrtl(Lx*Lx + Ly*Ly + Lz*Lz);
+    P  = round(sqrtl(Px*Px + Py*Py + Pz*Pz));
+    CM = sqrtl(pow(CMx,2) + pow(CMy,2) + pow(CMz,2)) / N / (env->units.kpc);
+
+    double vir = (Tavg == 0) ? 0 : T/Tavg/M;
+
+    fprintf(fpE, "%5ld "ENGYT" "ENGYT" "ENGYT" % .6e % .6e % .6e % .6e "VELT" "VELT" "VELT" "VELT" "ENGYT" "POST"\n", 
+            env->step, T,U, (T+U), Lx,Ly,Lz,L, Px,Py,Pz,P, vir, CM);
+
+    fflush(fpE);
+}
 
 //==============================================================================
 //                                  new_env
@@ -916,17 +505,7 @@ int main(int argc, char **argv)
 
     env_t *env = new_env();
 
-    struct
-    {
-        char *name;
-        void (*f)(env_t *env);
-    } ics[] = { {"random",  ic_random},
-                {"rshell",  ic_uniform_random_shell},
-                {"2shells", ic_two_shells},
-                {"shell",   ic_one_shell},
-                {"8",       ic_figure8},
-                {NULL, NULL}
-              };
+    struct iclist_s *ics = iclist();
 
     while (1) 
     {
@@ -937,7 +516,7 @@ int main(int argc, char **argv)
             {"steps",           1, 0, 0},
             {"reverse-at",      1, 0, 0},
             {"save-image",      2, 0, 0},
-            {"save-path-image", 0, 0, 0},
+            {"save-path-image", 2, 0, 0},
             {"dump-sim",        2, 0, 0},
             {"start-step",      1, 0, 0},
             {"run-backward",    0, 0, 0},
@@ -1104,7 +683,7 @@ int main(int argc, char **argv)
     //--------------------------------------------------------------------------
     char *efile = malloc(strlen(env->opt.tag)+1+strlen("ENERGY")+1);
     sprintf(efile, "%s.ENERGY", env->opt.tag);
-    fpE = fopen(efile, "w");
+    FILE *fpE = fopen(efile, "w");
     assert(fpE != NULL);
     free(efile);
 
@@ -1253,14 +832,22 @@ int main(int argc, char **argv)
             }
         }
 
-        integrate(env, forward);
+        if (forward) stats(env, fpE);
 
+        //----------------------------------------------------------------------
+        integrate(env);
+        //----------------------------------------------------------------------
+
+        if (!forward) stats(env, fpE);
+
+        //----------------------------------------------------------------------
+        //----------------------------------------------------------------------
         if (env->opt.save_path_every && (env->step % env->opt.save_path_every) == 0)
-            capture(env, env->p, &env->path, 0);
+            capture(env, env->p, &env->path, 0, 1);
 
         if (env->opt.save_image_every && (env->step % env->opt.save_image_every) == 0)
         {
-            capture(env, env->p, &env->snapshot, 1);
+            capture(env, env->p, &env->snapshot, 1, 0);
             save_snapshot(env);
         }
 
@@ -1296,7 +883,7 @@ int main(int argc, char **argv)
         // env->class_color[1][0] = 0;   
         // env->class_color[1][1] = 0; 
         // env->class_color[1][2] = 255;
-        capture(env, env->p0, &env->snapshot, 1);
+        capture(env, env->p0, &env->snapshot, 1,0);
 
         env->class_color[0][0] = 0;
         env->class_color[0][1] = 255;
@@ -1304,7 +891,7 @@ int main(int argc, char **argv)
         // env->class_color[1][0] = 255;
         // env->class_color[1][1] = 255;
         // env->class_color[1][2] = 255;
-        capture(env, env->p, &env->snapshot, 0);
+        capture(env, env->p, &env->snapshot, 0,0);
 
         save_comparison_image(env);
     }
@@ -1346,7 +933,10 @@ int main(int argc, char **argv)
                 if (n_bad == 0)
                     LOG("PERFECT REVERSAL!\n");
                 else
-                    LOG("%ld/%ld particles are not in the right place.\n", n_bad, env->N);
+                {
+                    LOG("%ld/%ld particles are not in the right place. "
+                        "Did you reverse at the right place? Should be at middle step + 1.\n", n_bad, env->N);
+                }
             }
         }
     }

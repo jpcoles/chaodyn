@@ -48,45 +48,41 @@
 //                                   Types
 //==============================================================================
 
-typedef __uint128_t uint128_t; // __attribute__((mode(TI)));
-//typedef unsigned int uint128_t __attribute__((mode(TI)));
-typedef __int128_t int128_t; // __attribute__((mode(TI)));
-//typedef long long int128_t;
 
-#define L_TIMET "%"PRId128
-#define L_DISTT "%"PRId128
-#define L_POST  "%"PRId128
-#define L_VELT  "%"PRId128
-#define L_ACCT  "%"PRId128
-#define L_RHOT  "%e"
-#define L_MASST "%e"
-#define L_ENGYT "%e"
-#define L_FORCET "%e"
+#define L_TIMET "% "PRId128
+#define L_DISTT "% "PRId128
+#define L_POST  "% "PRId128
+#define L_VELT  "% "PRId128
+#define L_ACCT  "% "PRId128
+#define L_RHOT  "% e"
+#define L_MASST "% e"
+#define L_ENGYT "% e"
+#define L_FORCET "% e"
 //#define L_FORCET "%"PRId64
-#define L_SOFTT  "%e"
+#define L_SOFTT  "% e"
 
-#define I_TIMET "%"PRId64
-#define I_DISTT "%"PRId64
-#define I_POST  "%"PRId64
-#define I_VELT  "%"PRId64
-#define I_ACCT  "%"PRId64
-#define I_RHOT  "%e"
-#define I_MASST "%e"
-#define I_ENGYT "%.20e"
-#define I_FORCET "%e"
+#define I_TIMET "% "PRId64
+#define I_DISTT "% "PRId64
+#define I_POST  "% "PRId64
+#define I_VELT  "% "PRId64
+#define I_ACCT  "% "PRId64
+#define I_RHOT  "% e"
+#define I_MASST "% e"
+#define I_ENGYT "% .15e"
+#define I_FORCET "% e"
 //#define I_FORCET "%"PRId64
-#define I_SOFTT  "%e"
+#define I_SOFTT  "% e"
 
-#define F_TIMET "%e"
-#define F_DISTT "%e"
-#define F_POST  "%e"
-#define F_VELT  "%e"
-#define F_ACCT  "%e"
-#define F_RHOT  "%e"
-#define F_MASST "%e"
-#define F_ENGYT "%e"
-#define F_FORCET "%e"
-#define F_SOFTT  "%e"
+#define F_TIMET "% e"
+#define F_DISTT "% e"
+#define F_POST  "% e"
+#define F_VELT  "% e"
+#define F_ACCT  "% e"
+#define F_RHOT  "% e"
+#define F_MASST "% e"
+#define F_ENGYT "% e"
+#define F_FORCET "% e"
+#define F_SOFTT  "% e"
 
 #if WITH_LONGS
 #define PRId128 "x"
@@ -110,6 +106,11 @@ typedef double  force_t;
 #endif
 
 #if WITH_INTEGERS
+typedef __uint128_t uint128_t; // __attribute__((mode(TI)));
+//typedef unsigned int uint128_t __attribute__((mode(TI)));
+typedef __int128_t int128_t; // __attribute__((mode(TI)));
+//typedef long long int128_t;
+
 typedef int64_t tyme_t;
 typedef int64_t pos_t;
 typedef int64_t dist_t;
@@ -129,6 +130,8 @@ typedef double  force_t;
 #endif
 
 #if WITH_FLOATS
+typedef double uint128_t; // __attribute__((mode(TI)));
+typedef double int128_t; // __attribute__((mode(TI)));
 typedef double pos_t;
 typedef double dist_t;
 typedef double vel_t;
@@ -236,7 +239,7 @@ typedef struct
     time_t seed;
     pos_t    radius;
 
-    char **class_color;
+    unsigned char **class_color;
 
     options_t opt;
 

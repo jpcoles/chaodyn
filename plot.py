@@ -1,50 +1,53 @@
 import sys
 from pylab import figure, subplot, show, plot
-from numpy import loadtxt
+from numpy import loadtxt, mean, ptp, amin
 
 figure()
-s1=subplot(611); s1.set_ylabel("K");
-s2=subplot(612); s2.set_ylabel("P");
-s3=subplot(613); s3.set_ylabel("K+P");
-s4=subplot(614); s4.set_ylabel("2K/P");
-s5=subplot(615); s5.set_ylabel("M");
-s6=subplot(616); s6.set_ylabel("L");
+ss = []
+ss.append(subplot(6,2,1));  ss[-1].set_ylabel(r"$T$");
+ss.append(subplot(6,2,2));  ss[-1].set_ylabel(r"$U$");
+ss.append(subplot(6,2,3));  ss[-1].set_ylabel(r"$T+U$");
+ss.append(subplot(6,2,4));  ss[-1].set_ylabel(r"$2T/U$");
+ss.append(subplot(6,2,5));  ss[-1].set_ylabel(r"$T/<r\cdot\nabla\phi>$");
+ss.append(subplot(6,2,6));  ss[-1].set_ylabel(r"$p$");
+ss.append(subplot(6,2,7));  ss[-1].set_ylabel(r"$R$ [kpc]");
+ss.append(subplot(6,2,8));  ss[-1].set_ylabel(r"$L$");
+ss.append(subplot(6,2,9));  ss[-1].set_ylabel(r"$L_x$");
+ss.append(subplot(6,2,10)); ss[-1].set_ylabel(r"$L_y$");
+ss.append(subplot(6,2,11)); ss[-1].set_ylabel(r"$L_z$");
+ss.append(subplot(6,2,12)); ss[-1].set_ylabel(r"sdf");
 
 if len(sys.argv) == 1:
     files = ['sphere-%sENERGY' % tag]
 else:
     files = sys.argv[1:]
 
-d1 = []
-d2 = []
-d3 = []
-d4 = []
-d5 = []
-d6 = []
+ds = [[] for s in ss]
 for f in files:
     X = loadtxt(f, unpack=True)
 
-    E = X[3,0]
+    E  = X[3,0]
+    CM = X[13,0]
+    if CM == 0: CM = 1
     print E
 
-    d1.append(X[0]); d1.append(X[1]/E)
-    d2.append(X[0]); d2.append(X[2]/E)
-    d3.append(X[0]); d3.append((X[1]+X[2]) / E)
-    d4.append(X[0]); d4.append(2*X[1]/X[2])
-    d5.append(X[0]); d5.append(X[11])
-    d6.append(X[0]); d6.append(X[6])
+    ds[0]  += [X[0], X[1]/E]
+    ds[1]  += [X[0], X[2]/E]
+    ds[2]  += [X[0], X[3]/E]
+    ds[3]  += [X[0], 2*X[1]/X[2]]
+    ds[4]  += [X[0,1:], X[12,1:]]
+    ds[5]  += [X[0], X[11]]
+    ds[6]  += [X[0], X[13]/CM]
+    ds[7]  += [X[0], X[7]]
+    ds[8]  += [X[0], X[4]]
+    ds[9]  += [X[0], X[5]]
+    ds[10] += [X[0], X[6]]
+    #ds[11] += [X[0,1:], X[3,1:]/X[3,:-1]]
+    #ds[11] += [X[0,1:], X[1,:-1]/X[1,1:]]
+    ds[11] += [X[0,1:], X[2,:-1]/X[2,1:]]
 
-s1.plot(*d1)
-#s1.axhline(1e63)
-s2.plot(*d2)
-#s2.axhline(-3e63)
-s3.plot(*d3)
-#s3.axhline(X[1,0] + X[2,0])
-#s3.axhline(-5.665e63)
-s4.plot(*d4)
-#s4.axhline(-1e35)
-s5.plot(*d5)
-s6.plot(*d6)
+for s,d in zip(ss,ds):
+    s.plot(*d)
 
 show()
 
