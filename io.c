@@ -219,3 +219,4 @@ int save_image_png(char *fname, unsigned char *image, uint32_t nrows, uint32_t n
 
     return 0;
 }
+

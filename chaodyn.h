@@ -217,17 +217,18 @@ typedef struct
     } X;
 
     char restart;
+    char tipsy;
 
 } options_t;
 
 typedef struct
 {
     size_t   N;
-    particle_t * restrict p0;
-    particle_t * restrict p;
-    force_t *    restrict F[3];
+    particle_t * __restrict p0;
+    particle_t * __restrict p;
+    force_t *    __restrict F[3];
 
-    force_t *** restrict Ft;
+    force_t *** __restrict Ft;
 
     soft_t eps;
 

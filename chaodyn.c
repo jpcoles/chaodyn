@@ -23,6 +23,7 @@
 #include "chaodyn.h"
 #include "io.h"
 #include "ic.h"
+#include "io_tipsy.h"
 
 
 //==============================================================================
@@ -44,17 +45,18 @@ void integrate(env_t *env)
     force_t       *Fz  = env->F[2];
     particle_t    *p   = env->p;
 
+    force_t Fx0, Fy0, Fz0;
+
     force_t ***Ft = env->Ft;
 
     double x,y,z;
     int128_t dx,dy,dz;
 
-    force_t Fx0, Fy0, Fz0;
 
     double r2,rinv,re;
     const double eps = env->eps;
-    const double e  = 1. / eps; 
-    const double G = env->units.G;
+    const double e   = 1. / eps; 
+    const double G   = env->units.G;
 
 //  eprintf("%ld] "POST" "POST" "POST"\n", 0, p[0].v[0], p[0].v[1], p[0].v[2]);
 //  eprintf("%ld] "POST" "POST" "POST"\n", 1, p[1].v[0], p[1].v[1], p[1].v[2]);
@@ -169,20 +171,6 @@ void integrate(env_t *env)
     }
 }
 
-
-//==============================================================================
-//                                generate_ics
-//==============================================================================
-void generate_ics(env_t *env)
-{
-    //ic_random(env);
-    //ic_uniform_random_shell(env);
-    //ic_figure8(env);
-    //ic_two_shells(env);
-    //ic_sphere(env);
-    //ic_one_shell(env);
-}
-
 //==============================================================================
 //                                  capture
 //==============================================================================
@@ -256,13 +244,14 @@ void add_phase_space_noise(env_t *env, double eps)
 //                              periodic_report
 //==============================================================================
 env_t *g_env = NULL;
-char buf[100];
-size_t last_step=0;
-size_t seconds=0;
-float rate = 0;
-size_t eta = 0; 
 void periodic_report(int sig)
 {
+    static char buf[100];
+    static size_t last_step=0;
+    static size_t seconds=0;
+    static float  rate = 0;
+    static size_t eta = 0; 
+
     assert(sig == SIGALRM);
 
     if (g_env == NULL) return;
@@ -310,11 +299,12 @@ void stats(env_t *env, FILE *fpE)
     energy_t T = 0;                 /* Kinetic energy   */
     energy_t U = 0;                 /* Potential energy */
     energy_t Tavg = 0;              /* Virial Theorem   */
-    double   L,  Lx=0,Ly=0,Lz=0;        /* Angular momentum */
-    vel_t    P,  Px=0,Py=0,Pz=0;        /* Momentum         */
-    pos_t    CM, CMx=0, CMy=0, CMz=0;
-
+    vel_t    Px=0,Py=0,Pz=0;        /* Momentum         */
+    pos_t    CMx=0, CMy=0, CMz=0;
+    double   Lx =0,Ly =0,Lz =0;        /* Angular momentum */
     double   Lxb=0,Lyb=0,Lzb=0;     /* Angular momentum */
+
+    double L,P,CM;
 
     double r2,re;
     double x,y,z;
@@ -393,13 +383,14 @@ void stats(env_t *env, FILE *fpE)
     Ly /= (Lyb == 0 ? 1 : Lyb);
     Lz /= (Lzb == 0 ? 1 : Lzb);
     L  = sqrtl(Lx*Lx + Ly*Ly + Lz*Lz);
-    P  = round(sqrtl(Px*Px + Py*Py + Pz*Pz));
+    //P  = round(sqrtl(((int128_t)Px)*Px + Py*Py + Pz*Pz));
+    P  = sqrtl(pow(Px,2)  + pow(Py,2)  + pow(Pz,2));
     CM = sqrtl(pow(CMx,2) + pow(CMy,2) + pow(CMz,2)) / N / (env->units.kpc);
 
     double vir = (Tavg == 0) ? 0 : T/Tavg/M;
 
-    fprintf(fpE, "%5ld "ENGYT" "ENGYT" "ENGYT" % .6e % .6e % .6e % .6e "VELT" "VELT" "VELT" "VELT" "ENGYT" "POST"\n", 
-            env->step, T,U, (T+U), Lx,Ly,Lz,L, Px,Py,Pz,P, vir, CM);
+    fprintf(fpE, "%5ld "ENGYT" "ENGYT" "ENGYT" % .6e % .6e % .6e % .6e "VELT" "VELT" "VELT" % .6e "ENGYT" "POST" "POST" "POST" % .6e\n", 
+            env->step, T,U, (T+U), Lx,Ly,Lz,L, Px,Py,Pz,P, vir, CMx,CMy,CMz,CM);
 
     fflush(fpE);
 }
@@ -461,6 +452,8 @@ env_t *new_env()
     env->units.L              = 1;
 
     env->opt.X.dup_ic         = 0;
+
+    env->opt.tipsy            = 0;
 
     return env;
 }
@@ -528,6 +521,8 @@ int main(int argc, char **argv)
             {"save",            1, 0, 0},
             {"gen-ic",          1, 0, 0},
             {"restart",         0, 0, 0},
+            {"list-ic",         0, 0, 0},
+            {"tipsy",           0, 0, 0},
             {0, 0, 0, 0}
         };
 
@@ -594,6 +589,16 @@ int main(int argc, char **argv)
                 else if OPTSTR("restart")
                 {
                     env->opt.restart = 1;
+                }
+                else if OPTSTR("list-ic")
+                {
+                    for (i=0; ics[i].name != NULL; i++)
+                        eprintf("%15s - %s\n", ics[i].name, ics[i].desc);
+                    exit(EXIT_SUCCESS);
+                }
+                else if OPTSTR("tipsy")
+                {
+                    env->opt.tipsy = 1;
                 }
                 break;
 
@@ -670,7 +675,14 @@ int main(int argc, char **argv)
             if (!strcmp(ics[i].name, env->opt.ic_gen_name))
             {
                 ics[i].f(env);
-                save_ic(env);
+                if (env->opt.tipsy)
+                {
+                    save_ic_tipsy(env);
+                }
+                else
+                {
+                    save_ic(env);
+                }
                 exit(EXIT_SUCCESS);
             }
         }

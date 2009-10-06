@@ -22,6 +22,8 @@ int main(int argc, char **argv)
     size_t nids = 0;
     char color_split = 0;
 
+    uint32_t xaxis=0, yaxis=1;
+
     FILE *select_fp = NULL;
 
     char *fname = NULL;
@@ -39,6 +41,9 @@ int main(int argc, char **argv)
         {
             {"geom",            1, 0, 0},
             {"select",          1, 0, 0},
+            {"xy",              0, 0, 0},
+            {"yz",              0, 0, 0},
+            {"xz",              0, 0, 0},
             {0, 0, 0, 0}
         };
 
@@ -65,6 +70,9 @@ int main(int argc, char **argv)
                     select_fname = malloc(strlen(optarg)+1);
                     strcpy(select_fname, optarg);
                 }
+                else if OPTSTR("xy") { xaxis=0; yaxis=1; break; }
+                else if OPTSTR("yz") { xaxis=1; yaxis=2; break; }
+                else if OPTSTR("xz") { xaxis=0; yaxis=2; break; }
                 break;
 
             case 'o':
@@ -128,8 +136,8 @@ int main(int argc, char **argv)
             env->p[i].class = i / (env->N/2);
 
         #define PLOT(i) do { \
-            int32_t c = ( env->p[i].x[0] + env->radius) / (2*env->radius / width);\
-            int32_t r = (-env->p[i].x[2] + env->radius) / (2*env->radius / height);\
+            int32_t c = ( env->p[i].x[xaxis] + env->radius) / (2*env->radius / width);\
+            int32_t r = (-env->p[i].x[yaxis] + env->radius) / (2*env->radius / height);\
             if (!(0 <= r && r < height)) break; \
             if (!(0 <= c && c < width))  break; \
             image[3*(r*width + c) + 0] = class_color[env->p[i].class][0]; \

@@ -16,6 +16,7 @@ typedef unsigned char class_t;
 //#define G 4.3e-3                    /* pc/Msun(km/s)^2  */
 //#define G 4.3e-3                    /* pc/Msun(km/s)^2  */
 
+#define eprintf(...) do { fprintf (stderr, __VA_ARGS__); } while (0)
 
 #define Myr  (1e6 * 365 * 24 * 60 * 60)   // [s]
 #define kpc  (3.08568025e19)              // [m]
@@ -69,21 +70,30 @@ typedef struct
 
 } env_t;
 
-int p_compare(const void *a0, const void *b0)
-{
-    const particle_t *a = (const particle_t *)a0;
-    const particle_t *b = (const particle_t *)b0;
-
-    assert(a->x[0] != b->x[0]);
-//  if (a->x[0] < b->x[0]) return -1;
-//  if (a->x[0] > b->x[0]) return +1;
-//  assert(0);
-    return 2*(a->x[0] > b->x[0]) - 1;
-    //return a->x[0] - b->x[0];
-}
 
 void sort(env_t *env)
 {
+    int p_compare(const void *a0, const void *b0)
+    {
+        const particle_t *a = (const particle_t *)a0;
+        const particle_t *b = (const particle_t *)b0;
+
+        assert(a->x[0] != b->x[0]);
+        return 2*(a->x[0] > b->x[0]) - 1;
+    }
+
+    qsort(env->p, env->N, sizeof(*(env->p)), p_compare);
+}
+
+void densort(env_t *env)
+{
+    int p_compare(const void *a0, const void *b0)
+    {
+        const particle_t *a = (const particle_t *)a0;
+        const particle_t *b = (const particle_t *)b0;
+
+        return 2*(labs(a->x[0]) > labs(b->x[0])) - 1;
+    }
     qsort(env->p, env->N, sizeof(*(env->p)), p_compare);
 }
 
@@ -167,13 +177,6 @@ void ic_cos(env_t *env)
         env->p[i].v[0] = 0;
         env->p[i].class = i / (N/4);
     }
-}
-
-void generate_ics(env_t *env)
-{
-    //ic_random(env);
-    //ic_uniform_plus_jitter(env);
-    ic_cos(env);
 }
 
 int save_image_png(char *filename, unsigned char *image, uint32_t nrows, uint32_t ncols)
@@ -284,15 +287,22 @@ void save_phase_space_diagram(env_t *env)
     free(fname);
 }
 
+void generate_ics(env_t *env)
+{
+    //ic_random(env);
+    ic_uniform_plus_jitter(env);
+    //ic_cos(env);
+}
+
 int main(int argc, char **argv)
 {
     size_t i;
     env_t env;
 
-    env.N            = 500;
+    env.N            = 600;
     env.p            = malloc(env.N * sizeof(*env.p));
     env.a            = malloc(env.N * sizeof(*env.a));
-    env.rho          = 5e5 * Msun/pow(kpc,2) / (M/pow(L,2)) / env.N; //1e2;
+    env.rho          = 5e6 * Msun/pow(kpc,2) / (M/pow(L,2)) / env.N; //1e2;
     env.dt           = 2;
 
     // Smaller values of maxR leads to few clumps forming
@@ -375,7 +385,7 @@ int main(int argc, char **argv)
          env.step++)
     {
         if ((env.step % env.output_every) == 0) capture(&env);
-#if 1
+#if 0
         //if ((env.step % env.output_every) == 0) 
         if ((env.step % 10) == 0) 
         {
@@ -385,6 +395,18 @@ int main(int argc, char **argv)
 #endif
 
 #if 1
+        if ((env.step % 50) == 0) 
+        {
+            printf("\n\n");
+            densort(&env);
+            for (i=1; i <= env.N; i+=1)
+            {
+                printf("%ld %e\n", labs(env.p[i].x[0]), ((double)i) / fabs(env.p[i].x[0]));
+            }
+        }
+#endif
+
+#if 0
         if (env.step == 2000)
         {
 #if 1
@@ -403,7 +425,7 @@ int main(int argc, char **argv)
         }
 #endif
 
-        printf("Step %ld\n", env.step);
+        eprintf("Step %ld\n", env.step);
         integrate(&env);
     }
 

@@ -243,7 +243,9 @@ int main(int argc, char **argv)
     for (i=0; i < env->N; i+=env->N*0.01)
     {
         double R = p[i].R;
-        fprintf(fp, "%e %e\n", R, 1/sqrt(RHO(i+1,R)));
+        t_dynamical = 1/sqrt(env->units.G * RHO(i+1,R)
+                    * env->units.T / env->units.Myr);
+        fprintf(fp, "%e %e\n", R, t_dynamical);
         //fprintf(fp, "%ld %e\n", i, 1/sqrt(RHO(i+1,R)));
     }
     fclose(fp);

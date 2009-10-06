@@ -6,13 +6,17 @@
 #include "ic.h"
 
 struct iclist_s ics[] = 
-{ {"random",  ic_random},
-  {"rshell",  ic_uniform_random_shell},
-  {"2shells", ic_two_shells},
-  {"shell",   ic_one_shell},
-  {"8",       ic_figure8},
-  {"2",       ic_two_points},
-  {NULL, NULL}
+{ {ic_random,              "random",  ""},
+  {ic_uniform_random_shell,"rshell",  ""},
+  {ic_two_shells,          "2shells", ""},
+  {ic_one_shell_eps10,     "shell",   "One 40kpc shell. 10kpc softening. Synonym for shell10."},
+  {ic_one_shell_eps10,     "shell10", "One 40kpc shell. 10kpc softening."},
+  {ic_one_shell_eps5,      "shell5",  "One 40kpc shell. 5kpc softening."},
+  {ic_one_shell_eps2,      "shell2",  "One 40kpc shell. 2kpc softening."},
+  {ic_one_shell_eps1,      "shell1",  "One 40kpc shell. 1kpc softening."},
+  {ic_figure8,             "8",       "Stable figure 8 pattern with 3 particles."},
+  {ic_two_points,          "2",       ""},
+  {NULL, NULL, NULL}
 };
 
 //==============================================================================
@@ -111,6 +115,7 @@ redo:   {
             y += y0;
             z += z0;
 
+#if 0
             for (j=0; j < i; j++)
             {
                 double r = sqrt(pow(env->p[i].x[0] - x, 2)
@@ -118,6 +123,7 @@ redo:   {
                               + pow(env->p[i].x[2] - z, 2));
                 if (r < 4*env->eps) goto redo;
             }
+#endif
         } 
 
         env->p[i].x[0] = x;
@@ -174,9 +180,57 @@ void ic_two_shells(env_t *env)
 }
 
 //==============================================================================
-//                                ic_one_shell
+//                             ic_one_shell_eps10
 //==============================================================================
-void ic_one_shell(env_t *env)
+void ic_one_shell_eps10(env_t *env)
+{
+    assert(env->N != 0);
+
+    double Myr  = env->units.Myr  = 1e6 * 365 * 24 * 60 * 60;   // [s]
+    double kpc  = env->units.kpc  = 3.08568025e19;              // [m]
+    double Msun = env->units.Msun = 1.98892e30;                 // [kg]
+
+    double Gsi = 6.67300e-11;                                   // [m^3 kg^-1 s^-2]
+    double L = env->units.L = 1e-15 * kpc;
+    double T = env->units.T = 1     * Myr;
+    double M = env->units.M = 1e-8  * Msun;
+               env->units.G = Gsi * (pow(L,-3) * M * pow(T,2));
+
+    env->N      = env->N;
+    env->M      = 1e12*Msun / M / env->N;
+    env->radius = 80*kpc / L;
+    env->eps    = 10*kpc / L;
+
+#if 1
+    LOG("env->M = %e\n", env->M);
+    LOG("1 Msun    = %e M\n", Msun / M);
+    LOG("1 Myr     = %e T\n", Myr / T);
+    LOG("1 kpc     = %e L\n", kpc / L);
+    LOG("1 Myr/kpc = %e V \n", (kpc/Myr) / (L/T));
+    LOG("G         = %e\n", env->units.G);
+#else
+    LOG("1 M = %e Msun\n", M / Msun);
+    LOG("1 T = %e Myr\n", T / Myr);
+    LOG("1 L = %e kpc\n", L / kpc);
+    LOG("1 V = %e kpc/Myr\n", (L/T) / (kpc/Myr));
+    LOG("1 kpc = %e L\n", kpc / L);
+    LOG("env->M      = "MASST" [%e Msun]\n", env->M, env->M/Msun);
+    LOG("env->radius = "POST"\n", env->radius);
+    LOG("env->eps    = "SOFTT"\n", env->eps);
+#endif
+
+    env->p = malloc(env->N * sizeof(*(env->p)));
+    env->opt.Nclasses = 1;
+
+    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0);
+
+    fflush(stdout);
+}
+
+//==============================================================================
+//                             ic_one_shell_eps5
+//==============================================================================
+void ic_one_shell_eps5(env_t *env)
 {
     assert(env->N != 0);
 
@@ -193,25 +247,91 @@ void ic_one_shell(env_t *env)
     env->N      = env->N;
     env->M      = 1e12*Msun / M / env->N;
     env->radius = 80*kpc / L;
-    env->eps    = 10*kpc / L;
+    env->eps    = 5*kpc / L;
 
-#if 1
     LOG("unit G = %e g\n", env->units.G);
     LOG("env->M = %e\n", env->M);
     LOG("1 M = %e\n", env->M / Msun);
     LOG("1 T = %e\n", T / Myr);
     LOG("1 L = %e\n", L / kpc);
     LOG("1 V = %e\n", (L/T) / (kpc/Myr));
-#else
-    LOG("1 M = %e Msun\n", M / Msun);
-    LOG("1 T = %e Myr\n", T / Myr);
-    LOG("1 L = %e kpc\n", L / kpc);
-    LOG("1 V = %e kpc/Myr\n", (L/T) / (kpc/Myr));
-    LOG("1 kpc = %e L\n", kpc / L);
-    LOG("env->M      = "MASST" [%e Msun]\n", env->M, env->M/Msun);
-    LOG("env->radius = "POST"\n", env->radius);
-    LOG("env->eps    = "SOFTT"\n", env->eps);
-#endif
+    LOG("soft = "SOFTT"\n", env->eps);
+
+    env->p = malloc(env->N * sizeof(*(env->p)));
+    env->opt.Nclasses = 1;
+
+    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0);
+
+    fflush(stdout);
+}
+
+//==============================================================================
+//                             ic_one_shell_eps2
+//==============================================================================
+void ic_one_shell_eps2(env_t *env)
+{
+    assert(env->N != 0);
+
+    double Myr  = env->units.Myr  = 1e6 * 365 * 24 * 60 * 60;   // [s]
+    double kpc  = env->units.kpc  = 3.08568025e19;              // [m]
+    double Msun = env->units.Msun = 1.98892e30;                 // [kg]
+
+    double G = 6.67300e-11;                                     // [m^3 kg^-1 s^-2]
+    double L = env->units.L = 1e-15 * kpc;
+    double T = env->units.T = 1     * Myr;
+    double M = env->units.M = 1e-8  * Msun;
+               env->units.G = G * (pow(L,-3) * M * pow(T,2));
+
+    env->N      = env->N;
+    env->M      = 1e12*Msun / M / env->N;
+    env->radius = 80*kpc / L;
+    env->eps    = 2*kpc / L;
+
+    LOG("unit G = %e g\n", env->units.G);
+    LOG("env->M = %e\n", env->M);
+    LOG("1 M = %e\n", env->M / Msun);
+    LOG("1 T = %e\n", T / Myr);
+    LOG("1 L = %e\n", L / kpc);
+    LOG("1 V = %e\n", (L/T) / (kpc/Myr));
+    LOG("soft = "SOFTT"\n", env->eps);
+
+    env->p = malloc(env->N * sizeof(*(env->p)));
+    env->opt.Nclasses = 1;
+
+    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0);
+
+    fflush(stdout);
+}
+
+//==============================================================================
+//                             ic_one_shell_eps1
+//==============================================================================
+void ic_one_shell_eps1(env_t *env)
+{
+    assert(env->N != 0);
+
+    double Myr  = env->units.Myr  = 1e6 * 365 * 24 * 60 * 60;   // [s]
+    double kpc  = env->units.kpc  = 3.08568025e19;              // [m]
+    double Msun = env->units.Msun = 1.98892e30;                 // [kg]
+
+    double G = 6.67300e-11;                                     // [m^3 kg^-1 s^-2]
+    double L = env->units.L = 1e-15 * kpc;
+    double T = env->units.T = 1     * Myr;
+    double M = env->units.M = 1e-8  * Msun;
+               env->units.G = G * (pow(L,-3) * M * pow(T,2));
+
+    env->N      = env->N;
+    env->M      = 1e12*Msun / M / env->N;
+    env->radius = 80*kpc / L;
+    env->eps    = 1*kpc / L;
+
+    LOG("unit G = %e g\n", env->units.G);
+    LOG("env->M = %e\n", env->M);
+    LOG("1 M = %e\n", env->M / Msun);
+    LOG("1 T = %e\n", T / Myr);
+    LOG("1 L = %e\n", L / kpc);
+    LOG("1 V = %e\n", (L/T) / (kpc/Myr));
+    LOG("soft = "SOFTT"\n", env->eps);
 
     env->p = malloc(env->N * sizeof(*(env->p)));
     env->opt.Nclasses = 1;

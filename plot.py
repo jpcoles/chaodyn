@@ -8,7 +8,7 @@ ss.append(subplot(6,2,1));  ss[-1].set_ylabel(r"$T$");
 ss.append(subplot(6,2,2));  ss[-1].set_ylabel(r"$U$");
 ss.append(subplot(6,2,3));  ss[-1].set_ylabel(r"$T+U$");
 ss.append(subplot(6,2,4));  ss[-1].set_ylabel(r"$2T/U$");
-ss.append(subplot(6,2,5));  ss[-1].set_ylabel(r"$T/<r\cdot\nabla\phi>$");
+ss.append(subplot(6,2,5));  ss[-1].set_ylabel(r"$T/(r\cdot\nabla\phi)$");
 ss.append(subplot(6,2,6));  ss[-1].set_ylabel(r"$p$");
 ss.append(subplot(6,2,7));  ss[-1].set_ylabel(r"$R$ [kpc]");
 ss.append(subplot(6,2,8));  ss[-1].set_ylabel(r"$L$");
