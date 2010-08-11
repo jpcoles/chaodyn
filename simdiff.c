@@ -78,7 +78,8 @@ int main(int argc, char **argv)
         dv1[0] += pow(p0.v[0] - p1.v[0], 2);
         dv1[1] += pow(p0.v[1] - p1.v[1], 2);
         dv1[2] += pow(p0.v[2] - p1.v[2], 2);
-#else
+#endif
+
 
 #if 0
         dv0[0] += pow(p0.x[0],2);

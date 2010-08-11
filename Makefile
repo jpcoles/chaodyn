@@ -11,15 +11,21 @@ LDFLAGS=$(LIBDIR) -lpng -lm $(OPENMP) -ltipsy
 
 default: chaodyn
 
-all: chaodyn tdyn sim2png simdiff chaodyn1D
+all: chaodyn tdyn sim2png simdiff chaodyn1D simcat simprop
 
 chaodyn: io.o io_tipsy.o ic.o chaodyn.o
+	$(CC) $(LDFLAGS) $^ -o $@ 
+
+simcat: io.o simcat.o
 	$(CC) $(LDFLAGS) $^ -o $@ 
 
 tdyn: io.o tdyn.o
 	$(CC) $(LDFLAGS) $^ -o $@ 
 
 sim2png: io.o sim2png.o
+	$(CC) $(LDFLAGS) $^ -o $@ 
+
+simprop: io.o simprop.o
 	$(CC) $(LDFLAGS) $^ -o $@ 
 
 simdiff: simdiff.o

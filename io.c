@@ -68,6 +68,7 @@ void load(env_t *env, char *fname)
     FILE *fp = fopen(fname, "r"); assert(fp != NULL);
     fread(&h, sizeof(h), 1, fp);
 
+#if 0
     if (h.with_integers != WITH_INTEGERS)
     {
         if (WITH_INTEGERS)
@@ -80,6 +81,7 @@ void load(env_t *env, char *fname)
                     "are not compatible.\n");
         exit(EXIT_FAILURE);
     }
+#endif
 
     env->N                = h.N;
     env->M                = h.M;

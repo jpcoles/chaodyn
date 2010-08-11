@@ -67,8 +67,9 @@ int main(int argc, char **argv)
                 }
                 else if OPTSTR("select")
                 {
-                    select_fname = malloc(strlen(optarg)+1);
-                    strcpy(select_fname, optarg);
+                    //select_fname = malloc(strlen(optarg)+1);
+                    //strcpy(select_fname, optarg);
+                    select_fname = optarg;
                 }
                 else if OPTSTR("xy") { xaxis=0; yaxis=1; break; }
                 else if OPTSTR("yz") { xaxis=1; yaxis=2; break; }
@@ -110,7 +111,8 @@ int main(int argc, char **argv)
         while (!feof(select_fp))
         {
             size_t id;
-            scanf("%ld\n", &id);
+            if (fscanf(select_fp, "%ld", &id) == 0) break;
+            eprintf("%ld\n", id);
             if (nids == allocated_ids)
             {
                 allocated_ids *= 2;
@@ -129,11 +131,14 @@ int main(int argc, char **argv)
 
     while (optind < argc)
     {
+        eprintf("%s\n", argv[optind]);
         load(env, argv[optind++]);
 
+        env->radius *= 2;
+
         size_t i;
-        for (i=0; i < env->N; i++)
-            env->p[i].class = i / (env->N/2);
+//      for (i=0; i < env->N; i++)
+//          env->p[i].class = i / (env->N/2);
 
         #define PLOT(i) do { \
             int32_t c = ( env->p[i].x[xaxis] + env->radius) / (2*env->radius / width);\

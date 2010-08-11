@@ -45,8 +45,8 @@ void save_ic_tipsy(env_t *env)
     //--------------------------------------------------------------------------
 
 
-    double Mt = 1.0 / (env->M * env->N);
-    double Lt = 1.0 / (env->units.L / env->radius);
+    double Mt = 2.3262e5 * env->units.Msun / env->units.M;
+    double Lt = 1.0      * env->units.kpc  / env->units.L;
     double Tt = sqrt(env->units.G * pow(Lt,-3) * Mt);
 
     eprintf("%ld %e %e\n", env->N, env->M, env->M * Mt);
@@ -57,7 +57,10 @@ void save_ic_tipsy(env_t *env)
 
     //--------------------------------------------------------------------------
     // Write the header and all the particles. The particles are assumed to be
-    // dark matter particles. Unit conversions are performed on the fly.
+    // dark matter particles. Unit conversions are performed on the fly. The
+    // softening (eps) is increased because PKDGRAV uses a spline softening and
+    // not Plummer. It is recommended that the Plummer softening be 30% lower
+    // than that used for the spline.
     //--------------------------------------------------------------------------
 
 

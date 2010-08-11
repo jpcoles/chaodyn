@@ -92,7 +92,12 @@ void densort(env_t *env)
         const particle_t *a = (const particle_t *)a0;
         const particle_t *b = (const particle_t *)b0;
 
-        return 2*(labs(a->x[0]) > labs(b->x[0])) - 1;
+        pos_t ax = labs(a->x[0]);
+        pos_t bx = labs(b->x[0]);
+        if (ax > bx) return +1;
+        if (ax < bx) return -1;
+        return 0;
+        //return 2*(labs(a->x[0]) > labs(b->x[0])) - 1;
     }
     qsort(env->p, env->N, sizeof(*(env->p)), p_compare);
 }
@@ -148,7 +153,7 @@ void ic_uniform_plus_jitter(env_t *env)
     //printf("%f %ld\n", dx, N);
     for (i=0; i < N; i++)
     {
-        env->p[i].x[0] = (pos_t)(i*dx - R) + (pos_t)(0.2*dx*(drand48()-0.5));
+        env->p[i].x[0] = (pos_t)(i*dx - R) + (pos_t)(0.01*dx*(drand48()-0.5));
         //env->p[i].x[0] = (pos_t)(i*dx - env->maxR) + (pos_t)(0.5*dx*(drand48()-0.5));
         //env->s[i].x = (2*i*dx + (pos_t)(dx*(drand48()-0.5))) - env->maxR;
         //printf("%i\n", env->s[i].x);
@@ -279,12 +284,11 @@ void save_sim(env_t *env)
 
 void save_phase_space_diagram(env_t *env)
 {
-    char *fname = malloc(3+1+5+1);
-    sprintf(fname, "chaodyn.%05ld", env->step);
+    char fname[128];
+    snprintf(fname, sizeof(fname), "chaodyn.ps.%05ld", env->step);
     save_image_png(fname, env->phase_space_diagram.image, 
                           env->phase_space_diagram.nr, 
                           env->phase_space_diagram.nc);
-    free(fname);
 }
 
 void generate_ics(env_t *env)
@@ -299,7 +303,8 @@ int main(int argc, char **argv)
     size_t i;
     env_t env;
 
-    env.N            = 600;
+    //env.N            = 600;
+    env.N            = 1300;
     env.p            = malloc(env.N * sizeof(*env.p));
     env.a            = malloc(env.N * sizeof(*env.a));
     env.rho          = 5e6 * Msun/pow(kpc,2) / (M/pow(L,2)) / env.N; //1e2;
@@ -310,9 +315,9 @@ int main(int argc, char **argv)
 
     env.maxV         = .008*(kpc/Myr) / (L/T); //1L << 26;
     env.start_time   = 0;
-    env.end_time     = 4000;
+    env.end_time     = 9000;
     env.t            = env.start_time;
-    env.output_every = 4;
+    env.output_every = 6;
 
     env.Nclasses       = 32;
     env.class_color    = malloc(env.Nclasses * sizeof(*env.class_color));
@@ -384,10 +389,14 @@ int main(int argc, char **argv)
          env.t++,
          env.step++)
     {
-        if ((env.step % env.output_every) == 0) capture(&env);
-#if 0
+        if ((env.step % env.output_every) == 0) 
+        {
+            capture(&env);
+            //save_density();
+        }
+#if 1
         //if ((env.step % env.output_every) == 0) 
-        if ((env.step % 10) == 0) 
+        if ((env.step % 500) == 0) 
         {
             capture_phase_space(&env, 1);
             save_phase_space_diagram(&env);
@@ -395,14 +404,18 @@ int main(int argc, char **argv)
 #endif
 
 #if 1
-        if ((env.step % 50) == 0) 
+        if ((env.step % 500) == 0) 
         {
-            printf("\n\n");
+            char fname[128];
+            snprintf(fname, sizeof(fname), "chaodyn.den.%05ld", env.step);
+            FILE *fp = fopen(fname, "w");
+            assert(fp != NULL);
             densort(&env);
-            for (i=1; i <= env.N; i+=1)
+            for (i=1; i < env.N; i+=1)
             {
-                printf("%ld %e\n", labs(env.p[i].x[0]), ((double)i) / fabs(env.p[i].x[0]));
+                fprintf(fp, "%ld %ld %e\n", labs(env.p[i].x[0]), i, ((double)i) / fabs(env.p[i].x[0]));
             }
+            fclose(fp);
         }
 #endif
 

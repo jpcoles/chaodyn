@@ -25,8 +25,10 @@
 #define VL(__lvl) if (env->opt.verbosity >= __lvl)
 
 #define LOG(...) do {  \
-    if (env->opt.logfp)  { fprintf(env->opt.logfp,  __VA_ARGS__); fflush(env->opt.logfp); } \
-    if (env->opt.stdout) { fprintf(env->opt.stdout, __VA_ARGS__); fflush(env->opt.stdout); } \
+    if (env->opt.logging) { \
+        if (env->opt.logfp)  { fprintf(env->opt.logfp,  __VA_ARGS__); fflush(env->opt.logfp); } \
+        VL(1) if (env->opt.stdout) { fprintf(env->opt.stdout, __VA_ARGS__); fflush(env->opt.stdout); } \
+    } \
 } while (0)
 
 #define eprintf(...) do { fprintf (stderr, __VA_ARGS__); } while (0)
@@ -188,20 +190,20 @@ typedef struct
     char     save_path_image;
     char     dump_sim;
 
-    size_t   save_every;
-    size_t   reverse_at;
-    size_t   save_image_every;
-    size_t   save_path_every;
-    size_t   start_step;
+    int64_t   save_every;
+    int64_t   reverse_at;
+    int64_t   save_image_every;
+    int64_t   save_path_every;
+    int64_t   start_step;
     uint32_t modify_mode;
 
     char    *tag;
     char    *inputfile;
-    size_t   verbosity; 
+    int64_t   verbosity; 
 
-    size_t   Nsteps;
-    size_t   Nclasses;
-    size_t   output_every;
+    int64_t   Nsteps;
+    int64_t   Nclasses;
+    int64_t   output_every;
 
     int32_t img_rows;
     int32_t img_cols;
@@ -218,12 +220,14 @@ typedef struct
 
     char restart;
     char tipsy;
+    char run;
+    char logging;
 
 } options_t;
 
 typedef struct
 {
-    size_t   N;
+    int64_t   N;
     particle_t * __restrict p0;
     particle_t * __restrict p;
     force_t *    __restrict F[3];
@@ -235,8 +239,8 @@ typedef struct
     mass_t   M;
     tyme_t  dt;
     tyme_t  t;
-    size_t step;
-    size_t end_step;
+    int64_t step;
+    int64_t end_step;
     time_t seed;
     pos_t    radius;
 
@@ -255,15 +259,15 @@ typedef struct
 {
     char version[16];
     uint32_t with_integers;
-    size_t   N;
+    int64_t   N;
     mass_t   M;
     soft_t   eps;
     tyme_t  dt;
-    size_t   Nclasses;
-    size_t   step;
-    size_t   dummy0;
+    int64_t   Nclasses;
+    int64_t   step;
+    int64_t   dummy0;
     pos_t    radius;
-    size_t   dummy1;
+    int64_t   dummy1;
     time_t   seed;
     uint32_t img_rows;
     uint32_t img_cols;

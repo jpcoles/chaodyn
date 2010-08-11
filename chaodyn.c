@@ -76,8 +76,8 @@ void integrate(env_t *env)
     //--------------------------------------------------------------------------
     // Acceleration / Potential
     //--------------------------------------------------------------------------
+                //schedule(dynamic, 2) 
     #pragma omp parallel for \
-                schedule(dynamic, 2) \
                 firstprivate(M,N) \
                 private(i,j) \
                 private(x,y,z, dx,dy,dz,r2) \
@@ -168,6 +168,10 @@ void integrate(env_t *env)
         DBG(1) eprintf("dx[%ld] "VELT"*"TIMET"=%ld\n", i, p[i].v[0],dt,p[i].v[0]*dt);
         //DBG(1) eprintf("dx[%ld] "POST" "POST" "POST"\n", i, dx, dy, dz);
         DBG(1) eprintf("x[%ld] "POST" "POST" "POST"\n", i, p[i].x[0], p[i].x[1], p[i].x[2]);
+
+        assert(p[i].x[0] != 0 
+            && p[i].x[1] != 0 
+            && p[i].x[2] != 0);
     }
 }
 
@@ -314,6 +318,8 @@ void stats(env_t *env, FILE *fpE)
     const double e   = 1. / eps; 
     const double G   = env->units.G;
 
+    if (fpE == NULL) return;
+
     #pragma omp parallel for \
                 private(x,y,z,dx,dy,dz) \
                 shared(p) \
@@ -351,8 +357,8 @@ void stats(env_t *env, FILE *fpE)
     T *= M;
     Tavg /= 2;
 
+                //schedule(dynamic, 2) 
     #pragma omp parallel for \
-                schedule(dynamic, 2) \
                 firstprivate(M,N) \
                 private(i,j) \
                 private(x,y,z, dx,dy,dz,r2) \
@@ -396,6 +402,27 @@ void stats(env_t *env, FILE *fpE)
 }
 
 //==============================================================================
+//                                read_random
+//==============================================================================
+unsigned int read_random()
+{
+    FILE *fp = NULL; //fopen("/dev/random", "rb");
+    unsigned int r;
+
+    if (fp != NULL)
+    {
+        fread(&r, 1, sizeof(r), fp);
+        fclose(fp);
+    }
+    else
+    {
+        r = time(NULL);
+    }
+
+    return r;
+}
+
+//==============================================================================
 //                                  new_env
 //==============================================================================
 env_t *new_env()
@@ -421,7 +448,7 @@ env_t *new_env()
     env->step                 = 0;
     env->opt.Nsteps           = 0;
     env->opt.output_every     = 1;
-    env->seed                 = time(NULL);
+    env->seed                 = read_random(); //time(NULL);
     env->opt.reverse_at       = 0;
     env->opt.save_image       = 0;
     env->opt.save_path_image  = 0;
@@ -454,6 +481,8 @@ env_t *new_env()
     env->opt.X.dup_ic         = 0;
 
     env->opt.tipsy            = 0;
+    env->opt.run              = 0;
+    env->opt.logging          = 1;
 
     return env;
 }
@@ -495,8 +524,19 @@ void usage()
 int main(int argc, char **argv)
 {
     size_t i,j;
+    FILE *fpE = NULL;
+    char *command_line=NULL;
 
     env_t *env = new_env();
+
+    int command_line_len=0;
+    for (i=0; i < argc; i++)
+        command_line_len += strlen(argv[i]) + 1;
+    command_line = malloc(command_line_len+1);
+    char *ptr = command_line;
+    for (i=0; i < argc; i++)
+        ptr += sprintf(ptr, "%s ", argv[i]);
+
 
     struct iclist_s *ics = iclist();
 
@@ -523,6 +563,8 @@ int main(int argc, char **argv)
             {"restart",         0, 0, 0},
             {"list-ic",         0, 0, 0},
             {"tipsy",           0, 0, 0},
+            {"run",             0, 0, 0},
+            {"no-logging",      0, 0, 0},
             {0, 0, 0, 0}
         };
 
@@ -566,8 +608,15 @@ int main(int argc, char **argv)
                 else if OPTSTR("verbosity")       env->opt.verbosity       = atol(optarg);
                 else if OPTSTR("tag") 
                 {
-                    env->opt.tag = malloc(strlen(optarg)+1);
-                    strcpy(env->opt.tag, optarg);
+                    if (!strcmp(":random:", optarg))
+                    {
+                        env->opt.tag = ":random:";
+                    }
+                    else
+                    {
+                        env->opt.tag = malloc(strlen(optarg)+1);
+                        strcpy(env->opt.tag, optarg);
+                    }
                 }
                 else if OPTSTR("dt")              env->dt = atof(optarg);
                 else if OPTSTR("dump-sim")
@@ -599,6 +648,14 @@ int main(int argc, char **argv)
                 else if OPTSTR("tipsy")
                 {
                     env->opt.tipsy = 1;
+                }
+                else if OPTSTR("run")
+                {
+                    env->opt.run = 1;
+                }
+                else if OPTSTR("no-logging")
+                {
+                    env->opt.logging = 0;
                 }
                 break;
 
@@ -638,16 +695,58 @@ int main(int argc, char **argv)
          usage();
     }
 
+
     //--------------------------------------------------------------------------
-    // Open the log file.
+
+
+    srand48(env->seed);
+
+
     //--------------------------------------------------------------------------
-    char *logfile = malloc(strlen(env->opt.tag)+1+4+1);
-    time_t now = time(NULL);
-    sprintf(logfile, "%s.log", env->opt.tag);
-    env->opt.logfp = fopen(logfile, "a+");
-    fprintf(env->opt.logfp, "New log created  %s\n", ctime(&now));
-    assert(env->opt.logfp != NULL);
-    free(logfile);
+
+
+    if (!strcmp(":random:", env->opt.tag))
+    {
+        env->opt.tag = malloc(1+11+1);
+        snprintf(env->opt.tag, 12, "r%ld", env->seed);
+    }
+
+
+    if (env->opt.logging)
+    {
+        //----------------------------------------------------------------------
+        // Open the log file.
+        //----------------------------------------------------------------------
+        char *logfile = malloc(strlen(env->opt.tag)+1+4+1);
+        time_t now = time(NULL);
+        sprintf(logfile, "%s.log", env->opt.tag);
+        env->opt.logfp = fopen(logfile, "at+");
+        fprintf(env->opt.logfp, "New log created  %s\n", ctime(&now));
+        assert(env->opt.logfp != NULL);
+        free(logfile);
+
+        //----------------------------------------------------------------------
+        // Open the Energy file.
+        //----------------------------------------------------------------------
+        char *efile = malloc(strlen(env->opt.tag)+1+strlen("ENERGY")+1);
+        sprintf(efile, "%s.ENERGY", env->opt.tag);
+        fpE = fopen(efile, "wt");
+        assert(fpE != NULL);
+        free(efile);
+    }
+
+
+    //--------------------------------------------------------------------------
+    //--------------------------------------------------------------------------
+
+    VL(1) LOG("Started with command line:\n");
+    VL(1) LOG("%s\n", command_line);
+
+    VL(1) LOG("Random seed %ld\n", env->seed);
+
+    VL(1) LOG("sizeof(pos_t)=%ld\n", sizeof(pos_t));
+    VL(1) LOG("sizeof(int128_t)=%ld\n", sizeof(int128_t));
+
 
     //--------------------------------------------------------------------------
     // Generate initial conditions and save them for later comparison.
@@ -675,37 +774,22 @@ int main(int argc, char **argv)
             if (!strcmp(ics[i].name, env->opt.ic_gen_name))
             {
                 ics[i].f(env);
-                if (env->opt.tipsy)
-                {
-                    save_ic_tipsy(env);
-                }
-                else
-                {
-                    save_ic(env);
-                }
+
+                if (env->opt.tipsy) save_ic_tipsy(env);
+                else                save_ic(env);
+
+                if (env->opt.run) break;
+
                 exit(EXIT_SUCCESS);
             }
         }
-        eprintf("Unknown initial condition specified.\n");
-        usage();
+        if (ics[i].name == NULL)
+        {
+            eprintf("Unknown initial condition specified.\n");
+            usage();
+        }
     }
 
-    //--------------------------------------------------------------------------
-    // Open the Energy file.
-    //--------------------------------------------------------------------------
-    char *efile = malloc(strlen(env->opt.tag)+1+strlen("ENERGY")+1);
-    sprintf(efile, "%s.ENERGY", env->opt.tag);
-    FILE *fpE = fopen(efile, "w");
-    assert(fpE != NULL);
-    free(efile);
-
-    //--------------------------------------------------------------------------
-    //--------------------------------------------------------------------------
-    VL(1) LOG("Random seed %ld\n", env->seed);
-    srand48(env->seed);
-
-    VL(1) LOG("sizeof(pos_t)=%ld\n", sizeof(pos_t));
-    VL(1) LOG("sizeof(int128_t)=%ld\n", sizeof(int128_t));
 
     //--------------------------------------------------------------------------
     // Memory to store the initial conditions. We compare the final state
@@ -953,8 +1037,8 @@ int main(int argc, char **argv)
         }
     }
 
-    fclose(fpE);
-    fclose(env->opt.logfp);
+    if (fpE) fclose(fpE);
+    if (env->opt.logfp) fclose(env->opt.logfp);
 
 #define FREE(ptr) do { if (ptr) free(ptr); } while(0)
     FREE(env->p0);

@@ -92,13 +92,20 @@ void sphere(env_t *env, pos_t x0, pos_t y0, pos_t z0, pos_t R, size_t N0, size_t
 //==============================================================================
 //                                   shell
 //==============================================================================
-void shell(env_t *env, pos_t x0, pos_t y0, pos_t z0, pos_t R, size_t N0, size_t N1, class_t class)
+void shell(env_t *env, pos_t x0, pos_t y0, pos_t z0, pos_t R, size_t N0, size_t N1, class_t class, int symm)
 {
-    size_t i,j;
+    size_t i,j, inc=1;
     double x,y,z, t,w;
 
-    assert(N1 % 2 == 0);
-    for (i=N0; i < N1; i+=2)
+    if (symm) 
+    {
+        assert((N1-N0) % 2 == 0);
+        inc = 2;
+    }
+
+    double cmx=0, cmy=0, cmz=0;
+
+    for (i=N0; i < N1; i+=inc)
     {
 redo:   {
             z = 2.0 * drand48() - 1.0;
@@ -114,6 +121,10 @@ redo:   {
             x += x0;
             y += y0;
             z += z0;
+
+            cmx += x;
+            cmy += y;
+            cmz += z;
 
 #if 0
             for (j=0; j < i; j++)
@@ -134,16 +145,31 @@ redo:   {
         env->p[i].v[2] = 0;
         env->p[i].class = class;
 
-        env->p[i+1].x[0] = -x;
-        env->p[i+1].x[1] = -y;
-        env->p[i+1].x[2] = -z;
-        env->p[i+1].v[0] = 0;
-        env->p[i+1].v[1] = 0;
-        env->p[i+1].v[2] = 0;
-        env->p[i+1].class = class;
+        if (symm)
+        {
+            env->p[i+1].x[0] = -x;
+            env->p[i+1].x[1] = -y;
+            env->p[i+1].x[2] = -z;
+            env->p[i+1].v[0] = 0;
+            env->p[i+1].v[1] = 0;
+            env->p[i+1].v[2] = 0;
+            env->p[i+1].class = class;
+        }
 
-        DBG(2) eprintf("%ld] %e %e %e\n", i, x, y, z);
+        //DBG(2) 
+//      eprintf("%ld] %e %e %e\n", i, x * env->units.L / env->units.kpc, 
+//                                    y * env->units.L / env->units.kpc, 
+//                                    z * env->units.L / env->units.kpc);
     }
+
+
+    cmx /= env->N;
+    cmy /= env->N;
+    cmz /= env->N;
+//  eprintf("CM %ld] %e %e %e\n", i, cmx * env->units.L / env->units.kpc, 
+//                                cmy * env->units.L / env->units.kpc, 
+//                                cmz * env->units.L / env->units.kpc);
+
 }
 
 //==============================================================================
@@ -151,14 +177,27 @@ redo:   {
 //==============================================================================
 void ic_uniform_random_shell(env_t *env)
 {
-    env->N      = MAX(env->N, 100);
-    env->M      = 1e22 / 4;
-    env->radius = 1e9;
-    env->eps    = 1e8;
-    env->p      = malloc(env->N * sizeof(*(env->p)));
+    assert(env->N != 0);
+
+    double Myr  = env->units.Myr  = 1e6 * 365 * 24 * 60 * 60;   // [s]
+    double kpc  = env->units.kpc  = 3.08568025e19;              // [m]
+    double Msun = env->units.Msun = 1.98892e30;                 // [kg]
+
+    double Gsi = 6.67300e-11;                                   // [m^3 kg^-1 s^-2]
+    double L = env->units.L = 1e-15 * kpc;
+    double T = env->units.T = .01   * Myr;
+    double M = env->units.M = 1e-8  * Msun;
+               env->units.G = Gsi * (pow(L,-3) * M * pow(T,2));
+
+    env->N      = env->N;
+    env->M      = 1e12*Msun / M / env->N;
+    env->radius = 40*kpc / L;
+    env->eps    = 10*kpc / L;
     env->opt.Nclasses = 1;
 
-    shell(env, 0,0,0, env->radius, 0, env->N, 0);
+    env->p = malloc(env->N * sizeof(*(env->p)));
+
+    shell(env, 0,0,0, env->radius, 0, env->N, 0, 0);
 }
 
 //==============================================================================
@@ -173,8 +212,8 @@ void ic_two_shells(env_t *env)
     env->p      = malloc(env->N * sizeof(*(env->p)));
     env->opt.Nclasses = 2;
 
-    shell(env, -env->radius*(1.-1./5),0,0, env->radius/5, 0,env->N/2, 0);
-    shell(env,  env->radius*(1.-1./5),0,0, env->radius/5, env->N/2,env->N, 1);
+    shell(env, -env->radius*(1.-1./5),0,0, env->radius/5, 0,env->N/2, 0,1);
+    shell(env,  env->radius*(1.-1./5),0,0, env->radius/5, env->N/2,env->N, 1,1);
 
     fflush(stdout);
 }
@@ -222,7 +261,7 @@ void ic_one_shell_eps10(env_t *env)
     env->p = malloc(env->N * sizeof(*(env->p)));
     env->opt.Nclasses = 1;
 
-    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0);
+    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0,1);
 
     fflush(stdout);
 }
@@ -260,7 +299,7 @@ void ic_one_shell_eps5(env_t *env)
     env->p = malloc(env->N * sizeof(*(env->p)));
     env->opt.Nclasses = 1;
 
-    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0);
+    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0,1);
 
     fflush(stdout);
 }
@@ -298,7 +337,7 @@ void ic_one_shell_eps2(env_t *env)
     env->p = malloc(env->N * sizeof(*(env->p)));
     env->opt.Nclasses = 1;
 
-    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0);
+    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0,1);
 
     fflush(stdout);
 }
@@ -336,7 +375,7 @@ void ic_one_shell_eps1(env_t *env)
     env->p = malloc(env->N * sizeof(*(env->p)));
     env->opt.Nclasses = 1;
 
-    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0);
+    shell(env, 0,0,0, 40*kpc / L, 0,env->N, 0,1);
 
     fflush(stdout);
 }
