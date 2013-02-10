@@ -1,15 +1,19 @@
 CC=gcc
-OPENMP=-fopenmp
+OPENMP=#-fopenmp
 INCDIR=-Itipsylib/trunk
+INCDIR+=-I/usr/X11/include
 LIBDIR=-Ltipsylib/trunk
+LIBDIR+=-L/usr/X11/lib
 CFLAGS=-Wall -g -O3 -std=c99 $(OPENMP) $(INCDIR)
 CFLAGS+=-ftree-vectorizer-verbose=3 -ftree-vectorize
-CFLAGS+=-fno-omit-frame-pointer -floop-optimize2 -funroll-loops -fprefetch-loop-arrays
+CFLAGS+=-fno-omit-frame-pointer -funroll-loops -fprefetch-loop-arrays
+#CFLAGS+=-fno-omit-frame-pointer -floop-optimize2 -funroll-loops -fprefetch-loop-arrays
 CFLAGS+=-fstrict-aliasing -mpreferred-stack-boundary=4 
+CFLAGS+=-fnested-functions
 
 LDFLAGS=$(LIBDIR) -lpng -lm $(OPENMP) -ltipsy
 
-default: chaodyn
+default: chaodyn1D
 
 all: chaodyn tdyn sim2png simdiff chaodyn1D simcat simprop
 

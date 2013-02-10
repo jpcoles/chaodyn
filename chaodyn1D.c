@@ -78,7 +78,7 @@ void sort(env_t *env)
         const particle_t *a = (const particle_t *)a0;
         const particle_t *b = (const particle_t *)b0;
 
-        assert(a->x[0] != b->x[0]);
+        assert(! (a->x[0] == b->x[0] && a->v[0] == b->v[0]) );
         return 2*(a->x[0] > b->x[0]) - 1;
     }
 
@@ -153,7 +153,7 @@ void ic_uniform_plus_jitter(env_t *env)
     //printf("%f %ld\n", dx, N);
     for (i=0; i < N; i++)
     {
-        env->p[i].x[0] = (pos_t)(i*dx - R) + (pos_t)(0.01*dx*(drand48()-0.5));
+        env->p[i].x[0] = (pos_t)(i*dx - R) ; //+ (pos_t)(0.01*dx*(drand48()-0.5));
         //env->p[i].x[0] = (pos_t)(i*dx - env->maxR) + (pos_t)(0.5*dx*(drand48()-0.5));
         //env->s[i].x = (2*i*dx + (pos_t)(dx*(drand48()-0.5))) - env->maxR;
         //printf("%i\n", env->s[i].x);
@@ -241,7 +241,7 @@ int save_image_png(char *filename, unsigned char *image, uint32_t nrows, uint32_
 void capture(env_t *env)
 {
     size_t i;
-    uint32_t r = env->step / env->output_every;
+    uint32_t r = (env->step-1) / env->output_every;
 
     uint32_t nc = env->snapshot.nc;
     uint32_t nr = env->snapshot.nr;
@@ -249,7 +249,8 @@ void capture(env_t *env)
     for (i=0; i < env->N; i++)
     {
         int32_t c = (env->p[i].x[0] + env->maxR) / (2.0*env->maxR) * nc;
-        if (!(0 <= c && c < env->snapshot.nc)) continue;
+        if (!(0 <= r && r < nr)) continue;
+        if (!(0 <= c && c < nc)) continue;
         env->snapshot.image[3*(r*nc + c) + 0] = env->class_color[env->p[i].class][0];
         env->snapshot.image[3*(r*nc + c) + 1] = env->class_color[env->p[i].class][1];
         env->snapshot.image[3*(r*nc + c) + 2] = env->class_color[env->p[i].class][2];
@@ -294,8 +295,8 @@ void save_phase_space_diagram(env_t *env)
 void generate_ics(env_t *env)
 {
     //ic_random(env);
-    ic_uniform_plus_jitter(env);
-    //ic_cos(env);
+    //ic_uniform_plus_jitter(env);
+    ic_cos(env);
 }
 
 int main(int argc, char **argv)
@@ -304,7 +305,7 @@ int main(int argc, char **argv)
     env_t env;
 
     //env.N            = 600;
-    env.N            = 1300;
+    env.N            = 1200;
     env.p            = malloc(env.N * sizeof(*env.p));
     env.a            = malloc(env.N * sizeof(*env.a));
     env.rho          = 5e6 * Msun/pow(kpc,2) / (M/pow(L,2)) / env.N; //1e2;
@@ -315,7 +316,7 @@ int main(int argc, char **argv)
 
     env.maxV         = .008*(kpc/Myr) / (L/T); //1L << 26;
     env.start_time   = 0;
-    env.end_time     = 9000;
+    env.end_time     = 4000;
     env.t            = env.start_time;
     env.output_every = 6;
 
@@ -376,6 +377,7 @@ int main(int argc, char **argv)
     env.snapshot.size  = 3 * env.snapshot.nr * env.snapshot.nc;
     env.snapshot.image = malloc(env.snapshot.size); memset(env.snapshot.image,0,env.snapshot.size);
 
+    //env.phase_space_diagram.nr    = (env.end_time-env.start_time) / env.output_every;
     env.phase_space_diagram.nr    = 1024;
     env.phase_space_diagram.nc    = 1024;
     env.phase_space_diagram.size  = 3 * env.phase_space_diagram.nr * env.phase_space_diagram.nc;
@@ -396,7 +398,8 @@ int main(int argc, char **argv)
         }
 #if 1
         //if ((env.step % env.output_every) == 0) 
-        if ((env.step % 500) == 0) 
+        //if ((env.step % 10) == 0) 
+        if ((env.step % 50) == 0) 
         {
             capture_phase_space(&env, 1);
             save_phase_space_diagram(&env);
