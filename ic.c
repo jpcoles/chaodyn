@@ -193,7 +193,7 @@ void ic_uniform_random_shell(env_t *env)
     env->M      = 1e12*Msun / M / env->N;
     env->radius = 40*kpc / L;
     env->eps    = 10*kpc / L;
-    env->opt.Nclasses = 1;
+    env->opt.Nclasses = 2;
 
     env->p = malloc(env->N * sizeof(*(env->p)));
 

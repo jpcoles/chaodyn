@@ -192,6 +192,7 @@ typedef struct
 
     int64_t   save_every;
     int64_t   reverse_at;
+    int64_t   reverse;
     int64_t   save_image_every;
     int64_t   save_path_every;
     int64_t   start_step;

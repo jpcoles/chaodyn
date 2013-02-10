@@ -548,6 +548,7 @@ int main(int argc, char **argv)
             {"seed",            1, 0, 0},
             {"steps",           1, 0, 0},
             {"reverse-at",      1, 0, 0},
+            {"reverse",         0, 0, 0},
             {"save-image",      2, 0, 0},
             {"save-path-image", 2, 0, 0},
             {"dump-sim",        2, 0, 0},
@@ -579,6 +580,7 @@ int main(int argc, char **argv)
                      if OPTSTR("seed")            env->seed                = atol(optarg);
                 else if OPTSTR("steps")           env->opt.Nsteps          = atol(optarg);
                 else if OPTSTR("reverse-at")      env->opt.reverse_at      = atol(optarg);
+                else if OPTSTR("reverse")         env->opt.reverse = 1;
                 else if OPTSTR("save")
                 {
                     env->opt.save = 1;
@@ -828,6 +830,7 @@ int main(int argc, char **argv)
 
     env->snapshot.image = calloc(env->snapshot.nr, env->snapshot.nc * 3);
     env->path.image     = calloc(env->path.nr,     env->path.nc     * 3);
+    env->opt.Nclasses = 2;
     env->class_color    = malloc(env->opt.Nclasses * sizeof(*env->class_color));
     for (i=0; i < env->opt.Nclasses; i++)
     {
@@ -872,6 +875,11 @@ int main(int argc, char **argv)
     // Run the simulation. Possibly reverse the velocities at a given time.
     //--------------------------------------------------------------------------
 
+    if (env->opt.reverse)
+    {
+        env->opt.reverse_at = env->opt.Nsteps / 2 + 1;
+    }
+
     env->end_step = env->step + env->opt.Nsteps;
 
     int forward = 1;
@@ -897,13 +905,13 @@ int main(int argc, char **argv)
                 case 3:
 #if WITH_INTEGERS
                     LOG("Flipping 1 velocity bit for particle %ld.\n", 0L);
-                    env->p[i].v[0] ^= 1<<0;
-                    env->p[i].v[1] ^= 1<<0;
-                    env->p[i].v[2] ^= 1<<0;
+                    env->p[0].v[0] ^= 1<<0;
+                    env->p[0].v[1] ^= 1<<0;
+                    env->p[0].v[2] ^= 1<<0;
 #else
-                    env->p[i].v[0] *= 1+1e-10;
-                    env->p[i].v[1] *= 1+1e-10;
-                    env->p[i].v[2] *= 1+1e-10;
+                    env->p[0].v[0] *= 1+1e-10;
+                    env->p[0].v[1] *= 1+1e-10;
+                    env->p[0].v[2] *= 1+1e-10;
 #endif
                     reverse_velocities(env, -1);
                     break;
@@ -954,6 +962,57 @@ int main(int argc, char **argv)
     if (env->opt.save_path_image)
         save_path_image(env);
 
+
+    if (env->opt.Nsteps != 0)
+    {
+        //save(env);
+
+        //--------------------------------------------------------------------------
+        // Check that our final conditions are the same as the initial ones.
+        //--------------------------------------------------------------------------
+        if (env->opt.reverse_at)
+        {
+            reverse_velocities(env, -1);
+
+            size_t n_bad = 0;
+            for (i=0; i < env->N; i++)
+            {
+                env->p[i].class = 0;
+
+                if ((env->p[i].x[0] != env->p0[i].x[0])
+                ||  (env->p[i].x[1] != env->p0[i].x[1])
+                ||  (env->p[i].x[2] != env->p0[i].x[2])
+                ||  (env->p[i].v[0] != env->p0[i].v[0])
+                ||  (env->p[i].v[1] != env->p0[i].v[1])
+                ||  (env->p[i].v[2] != env->p0[i].v[2]))
+                {
+                    env->p[i].class = 1;
+                    n_bad++;
+                    VL(2)
+                    {
+                        LOG("IC[%ld] x("POST" "POST" "POST") v("VELT" "VELT" "VELT")\n"
+                            "  [%ld] x("POST" "POST" "POST") v("VELT" "VELT" "VELT")\n",
+                            i, env->p0[i].x[0], env->p0[i].x[1], env->p0[i].x[2],
+                               env->p0[i].v[0], env->p0[i].v[1], env->p0[i].v[2],
+                            i, env->p[i].x[0],  env->p[i].x[1],  env->p[i].x[2],
+                               env->p[i].v[0],  env->p[i].v[1],  env->p[i].v[2]);
+                    }
+                }
+            }
+
+            VL(1)
+            {
+                if (n_bad == 0)
+                    LOG("PERFECT REVERSAL!\n");
+                else
+                {
+                    LOG("%ld/%ld particles are not in the right place. "
+                        "Did you reverse at the right place? Should be at middle step + 1.\n", n_bad, env->N);
+                }
+            }
+        }
+    }
+
     if (env->opt.save_image)
     {
 #if 0
@@ -973,68 +1032,23 @@ int main(int argc, char **argv)
 #endif
         //env->radius *= 3;
 
-        env->class_color[0][0] = 255; 
+        env->class_color[0][0] = 0; //255; 
         env->class_color[0][1] = 0; 
         env->class_color[0][2] = 0;
         // env->class_color[1][0] = 0;   
         // env->class_color[1][1] = 0; 
         // env->class_color[1][2] = 255;
-        capture(env, env->p0, &env->snapshot, 1,0);
+        //capture(env, env->p0, &env->snapshot, 1,0);
 
-        env->class_color[0][0] = 0;
-        env->class_color[0][1] = 255;
-        env->class_color[0][2] = 0;
+        env->class_color[1][0] = 0;
+        env->class_color[1][1] = 255;
+        env->class_color[1][2] = 0;
         // env->class_color[1][0] = 255;
         // env->class_color[1][1] = 255;
         // env->class_color[1][2] = 255;
-        capture(env, env->p, &env->snapshot, 0,0);
+        capture(env, env->p, &env->snapshot, 1,0);
 
         save_comparison_image(env);
-    }
-
-    if (env->opt.Nsteps != 0)
-    {
-        //save(env);
-
-        //--------------------------------------------------------------------------
-        // Check that our final conditions are the same as the initial ones.
-        //--------------------------------------------------------------------------
-        if (env->opt.reverse_at)
-        {
-            size_t n_bad = 0;
-            for (i=0; i < env->N; i++)
-            {
-                if ((env->p[i].x[0] != env->p0[i].x[0])
-                ||  (env->p[i].x[1] != env->p0[i].x[1])
-                ||  (env->p[i].x[2] != env->p0[i].x[2])
-                ||  (env->p[i].v[0] != -env->p0[i].v[0])
-                ||  (env->p[i].v[1] != -env->p0[i].v[1])
-                ||  (env->p[i].v[2] != -env->p0[i].v[2]))
-                {
-                    n_bad++;
-                    VL(2)
-                    {
-                        LOG("IC[%ld] x("POST" "POST" "POST") v("VELT" "VELT" "VELT")\n"
-                            "  [%ld] x("POST" "POST" "POST") v("VELT" "VELT" "VELT")\n",
-                            i, env->p0[i].x[0], env->p0[i].x[1], env->p0[i].x[2],
-                               env->p0[i].v[0], env->p0[i].v[1], env->p0[i].v[2],
-                            i, env->p[i].x[0],  env->p[i].x[1],  env->p[i].x[2],
-                               env->p[i].v[0],  env->p[i].v[1],  env->p[i].v[2]);
-                    }
-                }
-            }
-            
-            VL(1)
-            {
-                if (n_bad == 0)
-                    LOG("PERFECT REVERSAL!\n");
-                else
-                {
-                    LOG("%ld/%ld particles are not in the right place. "
-                        "Did you reverse at the right place? Should be at middle step + 1.\n", n_bad, env->N);
-                }
-            }
-        }
     }
 
     if (fpE) fclose(fpE);
